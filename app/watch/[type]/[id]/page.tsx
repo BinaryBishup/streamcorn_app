@@ -132,8 +132,14 @@ export default function WatchPage() {
     if (tapCount.current === 1) {
       doubleTapTimer.current = setTimeout(() => {
         tapCount.current = 0
-        setShowControls(prev => !prev)
-        if (!showControls) resetTimer()
+        if (showControls) {
+          // Single tap while controls visible → hide immediately
+          setShowControls(false)
+          if (controlsTimer.current) clearTimeout(controlsTimer.current)
+        } else {
+          // Single tap while controls hidden → show with auto-hide
+          resetTimer()
+        }
       }, 250)
     } else if (tapCount.current === 2) {
       if (doubleTapTimer.current) clearTimeout(doubleTapTimer.current)
