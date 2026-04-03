@@ -20,7 +20,8 @@ function formatTime(s: number) {
   return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}` : `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-interface Episode { id: number; episode_number: number; name: string; still_path: string | null }
+interface Episode { id: number; episode_number: number; name: string; still_path: string | null; runtime?: number | null }
+interface SeasonInfo { season_number: number; name: string; episode_count: number }
 
 export default function WatchPage() {
   const params = useParams()
@@ -45,12 +46,20 @@ export default function WatchPage() {
   const [loading, setLoading] = useState(true)
   const [seeking, setSeeking] = useState(false)
   const [episodes, setEpisodes] = useState<Episode[]>([])
+  const [seasons, setSeasons] = useState<SeasonInfo[]>([])
+  const [sheetSeason, setSheetSeason] = useState(season)
   const [showEpisodes, setShowEpisodes] = useState(false)
   const [hasNext, setHasNext] = useState(false)
   const [showNextPrompt, setShowNextPrompt] = useState(false)
   const [skipIntro, setSkipIntro] = useState<{ start: number; end: number } | null>(null)
   const [showSkipIntro, setShowSkipIntro] = useState(false)
   const [locked, setLocked] = useState(false)
+
+  // Lock to landscape
+  useEffect(() => {
+    try { (screen.orientation as any)?.lock?.('landscape').catch(() => {}) } catch {}
+    return () => { try { (screen.orientation as any)?.unlock?.() } catch {} }
+  }, [])
 
   // Fetch video source + metadata
   useEffect(() => {
@@ -67,10 +76,18 @@ export default function WatchPage() {
       setSrc(srcRes.url || null)
       setTitle(detailRes.title || detailRes.name || '')
 
-      // Fetch episodes for TV
+      // Fetch seasons list + episodes for TV
       if (type === 'tv') {
+        const allSeasons = (detailRes.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => ({
+          season_number: s.season_number, name: s.name, episode_count: s.episode_count,
+        }))
+        setSeasons(allSeasons)
+        setSheetSeason(season)
+
         const seasonRes = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${TMDB_KEY}`).then(r => r.json())
-        const eps = seasonRes.episodes || []
+        const eps = (seasonRes.episodes || []).map((e: any) => ({
+          id: e.id, episode_number: e.episode_number, name: e.name, still_path: e.still_path, runtime: e.runtime,
+        }))
         setEpisodes(eps)
         const currentEp = eps.find((e: Episode) => e.episode_number === episode)
         setEpisodeTitle(currentEp ? `S${season}:E${episode} ${currentEp.name}` : '')
@@ -78,11 +95,21 @@ export default function WatchPage() {
         setHasNext(idx < eps.length - 1)
       }
 
-      // Simulate skip intro (first 30-90s is usually intro)
       setSkipIntro({ start: 15, end: 75 })
     }
     load()
   }, [id, type, season, episode])
+
+  // Fetch episodes when sheet season changes
+  useEffect(() => {
+    if (type !== 'tv' || sheetSeason === season) return
+    fetch(`https://api.themoviedb.org/3/tv/${id}/season/${sheetSeason}?api_key=${TMDB_KEY}`)
+      .then(r => r.json())
+      .then(d => setEpisodes((d.episodes || []).map((e: any) => ({
+        id: e.id, episode_number: e.episode_number, name: e.name, still_path: e.still_path, runtime: e.runtime,
+      }))))
+      .catch(() => {})
+  }, [sheetSeason, type, id, season])
 
   // Init HLS
   useEffect(() => {
@@ -328,34 +355,67 @@ export default function WatchPage() {
       {/* Episode selector sheet */}
       {showEpisodes && (
         <div className="absolute inset-0 z-30 bg-black/80" onClick={() => setShowEpisodes(false)}>
-          <div className="absolute bottom-0 left-0 right-0 max-h-[60vh] bg-[#1a1a1a] rounded-t-2xl overflow-y-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-[#1a1a1a] px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-              <h3 className="text-white font-bold text-sm">Season {season} Episodes</h3>
-              <button onClick={() => setShowEpisodes(false)} className="text-white/40 p-1">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12"/></svg>
-              </button>
-            </div>
-            <div className="p-3 space-y-1">
-              {episodes.map(ep => (
-                <button
-                  key={ep.id}
-                  onClick={() => {
-                    setShowEpisodes(false)
-                    router.push(`/watch/tv/${id}?s=${season}&e=${ep.episode_number}`)
-                  }}
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl text-left ${ep.episode_number === episode ? 'bg-[#e50914]/20' : 'active:bg-white/[0.06]'}`}
-                >
-                  <span className={`text-lg font-bold w-8 text-center ${ep.episode_number === episode ? 'text-[#e50914]' : 'text-white/20'}`}>
-                    {ep.episode_number}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-medium truncate ${ep.episode_number === episode ? 'text-white' : 'text-white/70'}`}>{ep.name}</p>
-                  </div>
-                  {ep.episode_number === episode && (
-                    <span className="text-[#e50914] text-xs font-medium">Playing</span>
-                  )}
+          <div className="absolute right-0 top-0 bottom-0 w-[340px] bg-[#111] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="sticky top-0 bg-[#111] z-10 px-4 pt-4 pb-2 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-bold text-base">Episodes</h3>
+                <button onClick={() => setShowEpisodes(false)} className="text-white/40 p-1 active:text-white">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12"/></svg>
                 </button>
-              ))}
+              </div>
+              {/* Season tabs */}
+              {seasons.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+                  {seasons.map(s => (
+                    <button
+                      key={s.season_number}
+                      onClick={() => setSheetSeason(s.season_number)}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ${sheetSeason === s.season_number ? 'bg-white text-black' : 'bg-white/[0.08] text-white/50 active:bg-white/[0.15]'}`}
+                    >
+                      S{s.season_number}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {/* Episode list */}
+            <div className="p-3 space-y-2">
+              {episodes.map(ep => {
+                const isCurrent = ep.episode_number === episode && sheetSeason === season
+                return (
+                  <button
+                    key={ep.id}
+                    onClick={() => {
+                      setShowEpisodes(false)
+                      router.push(`/watch/tv/${id}?s=${sheetSeason}&e=${ep.episode_number}`)
+                    }}
+                    className={`w-full flex gap-3 p-2 rounded-xl text-left ${isCurrent ? 'bg-[#e50914]/15 ring-1 ring-[#e50914]/30' : 'active:bg-white/[0.06]'}`}
+                  >
+                    {/* Thumbnail */}
+                    <div className="w-24 aspect-video rounded-lg overflow-hidden bg-[#252525] flex-shrink-0 relative">
+                      {ep.still_path ? (
+                        <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/15 text-lg font-bold">{ep.episode_number}</div>
+                      )}
+                      {isCurrent && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                          <div className="w-5 h-5 border-2 border-white rounded-full flex items-center justify-center">
+                            <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 py-0.5">
+                      <p className={`text-xs font-semibold truncate ${isCurrent ? 'text-[#e50914]' : 'text-white/80'}`}>
+                        E{ep.episode_number} &middot; {ep.name}
+                      </p>
+                      {ep.runtime && <p className="text-white/30 text-[10px] mt-0.5">{ep.runtime}m</p>}
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
         </div>

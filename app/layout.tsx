@@ -39,7 +39,7 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="font-sans antialiased bg-black text-white min-h-screen">
         <Header />
-        <main className="pb-20">
+        <main className="pb-24">
           {children}
         </main>
         <BottomNav />

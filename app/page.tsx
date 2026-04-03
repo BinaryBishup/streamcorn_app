@@ -9,7 +9,7 @@ async function getHomeData() {
 
   const { data: hero } = await supabase
     .from('content')
-    .select('tmdb_id, type, title, backdrop_path, rating, year, overview')
+    .select('tmdb_id, type, title, poster_path, backdrop_path, rating, year, overview')
     .not('title', 'is', null)
     .not('backdrop_path', 'is', null)
     .gte('rating', 7.5)
