@@ -23,6 +23,15 @@ body {
   -webkit-touch-callout: none;
   overscroll-behavior: none;
   user-select: none;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  min-height: 100%;
 }
 
 /* Hide scrollbar for carousels */

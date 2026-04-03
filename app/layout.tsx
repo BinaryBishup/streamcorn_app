@@ -43,7 +43,7 @@ export default function RootLayout({
         <Header />
         <SubscriptionGate>
           <SessionGate>
-            <main className="pb-20">
+            <main className="pb-[72px]">
               {children}
             </main>
           </SessionGate>
