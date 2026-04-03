@@ -105,6 +105,7 @@ function PendingScreen({ plan, txnId, onRetry, initialSeconds }: { plan: typeof 
             Check Now
           </button>
           <button onClick={onRetry} className="text-gray-400 text-sm active:text-gray-600">Haven't paid yet? Make payment</button>
+          <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-300 text-xs mt-4 active:text-gray-500 block">Sign Out</button>
         </>
       ) : (
         <>
@@ -115,6 +116,7 @@ function PendingScreen({ plan, txnId, onRetry, initialSeconds }: { plan: typeof 
           <p className="text-gray-500 text-sm mb-6">If you've paid, it may take a bit longer. Contact support if needed.</p>
           <button onClick={onRetry} className="w-full max-w-xs py-3.5 bg-[#e50914] text-white font-bold text-sm rounded-2xl active:bg-[#b20710] mb-3">Try Again</button>
           <button onClick={() => router.push('/')} className="text-gray-400 text-sm">Go to Home</button>
+          <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-300 text-xs mt-4 active:text-gray-500 block">Sign Out</button>
         </>
       )}
     </div>
@@ -320,6 +322,7 @@ export default function SubscribePage() {
           ))}
         </div>
         <p className="text-gray-400 text-[10px] text-center mt-5">Secure UPI payment · Cancel anytime · No hidden charges</p>
+      <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-400 text-xs text-center mt-4 block mx-auto active:text-gray-600">Sign Out</button>
       </div>
     </div>
   )
