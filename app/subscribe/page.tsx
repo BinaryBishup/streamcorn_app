@@ -78,8 +78,11 @@ function PendingScreen({ plan, txnId, onRetry, initialSeconds }: { plan: typeof 
   const seconds = timeLeft % 60
   const progress = timeLeft / (30 * 60)
 
+  const signOut = () => { localStorage.clear(); window.location.href = '/auth' }
+
   return (
-    <div className="min-h-screen bg-[#f5f5f5] flex flex-col items-center justify-center px-6 text-center">
+    <div className="min-h-screen bg-[#f5f5f5] flex flex-col items-center justify-center px-6 text-center relative">
+      <button onClick={signOut} className="absolute top-5 right-5 text-gray-400 text-sm font-medium px-4 py-1.5 rounded-full border border-gray-200 active:bg-gray-100">Sign Out</button>
       {!timedOut ? (
         <>
           {/* Circular timer */}
@@ -105,7 +108,6 @@ function PendingScreen({ plan, txnId, onRetry, initialSeconds }: { plan: typeof 
             Check Now
           </button>
           <button onClick={onRetry} className="text-gray-400 text-sm active:text-gray-600">Haven't paid yet? Make payment</button>
-          <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-300 text-xs mt-4 active:text-gray-500 block">Sign Out</button>
         </>
       ) : (
         <>
@@ -116,7 +118,6 @@ function PendingScreen({ plan, txnId, onRetry, initialSeconds }: { plan: typeof 
           <p className="text-gray-500 text-sm mb-6">If you've paid, it may take a bit longer. Contact support if needed.</p>
           <button onClick={onRetry} className="w-full max-w-xs py-3.5 bg-[#e50914] text-white font-bold text-sm rounded-2xl active:bg-[#b20710] mb-3">Try Again</button>
           <button onClick={() => router.push('/')} className="text-gray-400 text-sm">Go to Home</button>
-          <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-300 text-xs mt-4 active:text-gray-500 block">Sign Out</button>
         </>
       )}
     </div>
@@ -189,10 +190,9 @@ export default function SubscribePage() {
             <p className="text-gray-900 font-semibold text-sm">Complete Payment</p>
             <p className="text-gray-400 text-xs">Streamcorn Subscription</p>
           </div>
-          <div className="flex items-center gap-1">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth={2.5}><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-            <span className="text-green-600 text-[10px] font-medium">Secure</span>
-          </div>
+          <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-400 text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 active:bg-gray-50">
+            Sign Out
+          </button>
         </div>
 
         {/* Order summary */}
@@ -261,8 +261,15 @@ export default function SubscribePage() {
   // Plans screen — light mode
   return (
     <div className="min-h-screen bg-[#f5f5f5]">
+      {/* Header with sign out */}
+      <div className="flex items-center justify-between px-5 pt-4 bg-[#e50914]">
+        <span />
+        <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-white/80 text-sm font-medium px-4 py-1.5 rounded-full border border-white/30 active:bg-white/10">
+          Sign Out
+        </button>
+      </div>
       {/* Hero */}
-      <div className="bg-[#e50914] px-5 pt-10 pb-8 text-center">
+      <div className="bg-[#e50914] px-5 pt-4 pb-8 text-center">
         <h1 className="text-white font-black text-3xl uppercase tracking-tight mb-2">Streamcorn</h1>
         <p className="text-white/90 text-lg font-bold mb-1">{isSubscribed ? 'Upgrade Your Plan' : 'Every Platform. One Price.'}</p>
         <p className="text-white/60 text-sm">{isSubscribed ? `You're on ${sub.plan_name}` : 'Start watching today'}</p>
@@ -322,7 +329,6 @@ export default function SubscribePage() {
           ))}
         </div>
         <p className="text-gray-400 text-[10px] text-center mt-5">Secure UPI payment · Cancel anytime · No hidden charges</p>
-      <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-400 text-xs text-center mt-4 block mx-auto active:text-gray-600">Sign Out</button>
       </div>
     </div>
   )
