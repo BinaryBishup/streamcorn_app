@@ -67,18 +67,18 @@ export default function SubscribePage() {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#e50914] border-t-transparent rounded-full animate-spin" /></div>
 
-  // Pending screen
+  // Pending screen — light mode
   if (screen === 'pending' && selectedPlan) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-16 h-16 mb-5 rounded-full bg-yellow-500/15 flex items-center justify-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#eab308" strokeWidth={2}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      <div className="min-h-screen bg-[#f5f5f5] flex flex-col items-center justify-center px-6 text-center">
+        <div className="w-16 h-16 mb-5 rounded-full bg-amber-100 flex items-center justify-center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth={2}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
         </div>
-        <h1 className="text-white text-xl font-bold mb-2">Payment Pending</h1>
-        <p className="text-white/40 text-sm mb-2">Your {selectedPlan.label} plan will be activated once payment is confirmed.</p>
-        {txnId && <p className="text-white/20 text-[10px] font-mono mb-6">{txnId}</p>}
+        <h1 className="text-gray-900 text-xl font-bold mb-2">Payment Pending</h1>
+        <p className="text-gray-500 text-sm mb-2">Your {selectedPlan.label} plan will be activated once payment is confirmed.</p>
+        {txnId && <p className="text-gray-300 text-[10px] font-mono mb-6">{txnId}</p>}
         <button onClick={() => router.push('/')} className="w-full max-w-xs py-3.5 bg-[#e50914] text-white font-bold text-sm rounded-2xl active:bg-[#b20710] mb-3">Go to Home</button>
-        <button onClick={() => setScreen('payment')} className="text-white/40 text-sm active:text-white/60">Try payment again</button>
+        <button onClick={() => setScreen('payment')} className="text-gray-400 text-sm active:text-gray-600">Try payment again</button>
       </div>
     )
   }
@@ -165,72 +165,71 @@ export default function SubscribePage() {
     )
   }
 
-  // Plans screen
+  // Plans screen — light mode
   return (
-    <div className="min-h-screen bg-black">
-      <div className="relative px-5 pt-10 pb-6 text-center overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-b from-[#e50914]/10 via-transparent to-transparent pointer-events-none" />
-        <h1 className="text-[#e50914] font-black text-3xl uppercase tracking-tight mb-3 relative z-10">Streamcorn</h1>
-        <p className="text-white text-xl font-bold mb-2 relative z-10">{isSubscribed ? 'Upgrade Your Plan' : 'Every Platform. One Price.'}</p>
-        <p className="text-white/40 text-sm relative z-10">{isSubscribed ? `You're on ${sub.plan_name}` : 'Start watching today'}</p>
+    <div className="min-h-screen bg-[#f5f5f5]">
+      {/* Hero */}
+      <div className="bg-[#e50914] px-5 pt-10 pb-8 text-center">
+        <h1 className="text-white font-black text-3xl uppercase tracking-tight mb-2">Streamcorn</h1>
+        <p className="text-white/90 text-lg font-bold mb-1">{isSubscribed ? 'Upgrade Your Plan' : 'Every Platform. One Price.'}</p>
+        <p className="text-white/60 text-sm">{isSubscribed ? `You're on ${sub.plan_name}` : 'Start watching today'}</p>
       </div>
 
-      {/* Platforms — contained */}
-      <div className="flex items-center justify-center gap-4 px-6 mb-6 flex-wrap">
+      {/* Platforms */}
+      <div className="flex items-center justify-center gap-4 px-6 py-5 bg-white flex-wrap">
         {PLATFORMS.map((p, i) => (
-          <img key={i} src={p.logo} alt="" className="h-4 w-auto object-contain opacity-50" />
+          <img key={i} src={p.logo} alt="" className="h-5 w-auto object-contain opacity-70" />
         ))}
       </div>
 
-      {/* Features — icon based, wrapped */}
-      <div className="flex flex-wrap gap-2 px-5 mb-8 justify-center">
+      {/* Features */}
+      <div className="flex flex-wrap gap-2 px-5 py-5 justify-center">
         {FEATURES.map(f => (
-          <div key={f.text} className="flex items-center gap-2 px-3 py-2 bg-white/[0.04] rounded-xl border border-white/[0.04]">
+          <div key={f.text} className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-gray-100 shadow-sm">
             <span className="text-[#e50914]">{f.icon}</span>
-            <span className="text-white/60 text-[11px] font-medium">{f.text}</span>
+            <span className="text-gray-600 text-[11px] font-medium">{f.text}</span>
           </div>
         ))}
       </div>
 
       {/* Plans */}
-      <div className="px-5 mb-8">
+      <div className="px-5 pb-8">
         <div className="space-y-3">
           {PLANS.filter(p => isSubscribed ? p.devices > (sub?.max_devices || 0) : true).map((plan) => (
             <button
               key={plan.id}
               onClick={() => handleSelect(plan)}
               disabled={processing}
-              className={`w-full rounded-2xl border text-left active:scale-[0.98] transition-all disabled:opacity-50 overflow-hidden ${plan.popular ? 'border-[#e50914]/50' : 'border-white/[0.06]'}`}
+              className={`w-full rounded-2xl border text-left active:scale-[0.98] transition-all disabled:opacity-50 overflow-hidden bg-white shadow-sm ${plan.popular ? 'border-[#e50914] ring-1 ring-[#e50914]/20' : 'border-gray-200'}`}
             >
               {plan.popular && (
-                <div className="bg-[#e50914] py-1 text-center">
+                <div className="bg-[#e50914] py-1.5 text-center">
                   <span className="text-white text-[10px] font-bold uppercase tracking-widest">Most Popular</span>
                 </div>
               )}
-              <div className={`p-5 ${plan.popular ? 'bg-[#e50914]/[0.04]' : 'bg-white/[0.02]'}`}>
+              <div className="p-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-white font-bold text-lg">{plan.label}</p>
+                    <p className="text-gray-900 font-bold text-lg">{plan.label}</p>
                     <div className="flex items-center gap-1.5 mt-1">
-                      <span className="text-white/30 text-[11px]">{plan.quality}</span>
-                      <span className="w-1 h-1 rounded-full bg-white/15" />
-                      <span className="text-white/30 text-[11px]">{plan.devices} device{plan.devices > 1 ? 's' : ''}</span>
-                      <span className="w-1 h-1 rounded-full bg-white/15" />
-                      <span className="text-white/30 text-[11px]">Ad-free</span>
+                      <span className="text-gray-400 text-[11px]">{plan.quality}</span>
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <span className="text-gray-400 text-[11px]">{plan.devices} device{plan.devices > 1 ? 's' : ''}</span>
+                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                      <span className="text-gray-400 text-[11px]">Ad-free</span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-white font-black text-3xl leading-none">₹{plan.price}</p>
-                    <p className="text-white/25 text-[10px] mt-0.5">/month</p>
+                    <p className="text-gray-900 font-black text-3xl leading-none">₹{plan.price}</p>
+                    <p className="text-gray-400 text-[10px] mt-0.5">/month</p>
                   </div>
                 </div>
               </div>
             </button>
           ))}
         </div>
+        <p className="text-gray-400 text-[10px] text-center mt-5">Secure UPI payment · Cancel anytime · No hidden charges</p>
       </div>
-
-      <p className="text-white/15 text-[10px] text-center px-8 pb-8">Secure UPI payment · Cancel anytime · No hidden charges</p>
     </div>
   )
 }
