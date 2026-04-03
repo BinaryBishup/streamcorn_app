@@ -33,6 +33,94 @@ const UPI_APPS = [
   { name: 'Other UPI App', scheme: 'upi://pay', icon: '/icons/upi.svg', color: '#3d8168' },
 ]
 
+function PendingScreen({ plan, txnId, onRetry }: { plan: typeof PLANS[0]; txnId: string | null; onRetry: () => void }) {
+  const router = useRouter()
+  const [timeLeft, setTimeLeft] = useState(30 * 60) // 30 minutes
+  const [timedOut, setTimedOut] = useState(false)
+
+  // Countdown timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) { clearInterval(timer); setTimedOut(true); return 0 }
+        return prev - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  // Poll for payment confirmation every 20s
+  useEffect(() => {
+    if (!txnId) return
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/subscribe/status?payment_id=${txnId}`)
+        const data = await res.json()
+        if (data.status === 'completed') {
+          clearInterval(poll)
+          router.push('/')
+        }
+      } catch {}
+    }, 20000)
+    return () => clearInterval(poll)
+  }, [txnId, router])
+
+  const checkNow = async () => {
+    if (!txnId) return
+    try {
+      const res = await fetch(`/api/subscribe/status?payment_id=${txnId}`)
+      const data = await res.json()
+      if (data.status === 'completed') router.push('/')
+    } catch {}
+  }
+
+  const minutes = Math.floor(timeLeft / 60)
+  const seconds = timeLeft % 60
+  const progress = timeLeft / (30 * 60)
+
+  return (
+    <div className="min-h-screen bg-[#f5f5f5] flex flex-col items-center justify-center px-6 text-center">
+      {!timedOut ? (
+        <>
+          {/* Circular timer */}
+          <div className="relative w-28 h-28 mb-6">
+            <svg className="w-full h-full -rotate-90" viewBox="0 0 120 120">
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#e5e7eb" strokeWidth="4" />
+              <circle cx="60" cy="60" r="54" fill="none" stroke="#e50914" strokeWidth="4" strokeLinecap="round"
+                strokeDasharray={`${progress * 339.3} 339.3`} className="transition-all duration-1000" />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-gray-900 text-2xl font-bold tabular-nums">{minutes}:{seconds.toString().padStart(2, '0')}</span>
+              <span className="text-gray-400 text-[10px]">remaining</span>
+            </div>
+          </div>
+
+          <h1 className="text-gray-900 text-xl font-bold mb-2">Verifying Payment</h1>
+          <p className="text-gray-500 text-sm mb-1">We're confirming your UPI payment for <span className="font-semibold text-gray-700">{plan.label}</span>.</p>
+          <p className="text-gray-400 text-xs mb-2">This usually takes a few minutes.</p>
+          {txnId && <p className="text-gray-300 text-[9px] font-mono mb-6">{txnId}</p>}
+
+          <button onClick={checkNow} className="w-full max-w-xs py-3 bg-white border border-gray-200 text-gray-700 font-semibold text-sm rounded-2xl active:bg-gray-50 shadow-sm flex items-center justify-center gap-2 mb-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            Check Now
+          </button>
+          <button onClick={onRetry} className="text-gray-400 text-sm active:text-gray-600">Pay again</button>
+        </>
+      ) : (
+        <>
+          <div className="w-16 h-16 mb-5 rounded-full bg-red-100 flex items-center justify-center">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth={2}><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>
+          </div>
+          <h1 className="text-gray-900 text-xl font-bold mb-2">Verification Timed Out</h1>
+          <p className="text-gray-500 text-sm mb-6">If you've paid, it may take a bit longer. Contact support if needed.</p>
+          <button onClick={onRetry} className="w-full max-w-xs py-3.5 bg-[#e50914] text-white font-bold text-sm rounded-2xl active:bg-[#b20710] mb-3">Try Again</button>
+          <button onClick={() => router.push('/')} className="text-gray-400 text-sm">Go to Home</button>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function SubscribePage() {
   const router = useRouter()
   const [sub, setSub] = useState<any>(null)
@@ -67,20 +155,9 @@ export default function SubscribePage() {
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#e50914] border-t-transparent rounded-full animate-spin" /></div>
 
-  // Pending screen — light mode
+  // Pending screen — light mode with timer
   if (screen === 'pending' && selectedPlan) {
-    return (
-      <div className="min-h-screen bg-[#f5f5f5] flex flex-col items-center justify-center px-6 text-center">
-        <div className="w-16 h-16 mb-5 rounded-full bg-amber-100 flex items-center justify-center">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth={2}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-        </div>
-        <h1 className="text-gray-900 text-xl font-bold mb-2">Payment Pending</h1>
-        <p className="text-gray-500 text-sm mb-2">Your {selectedPlan.label} plan will be activated once payment is confirmed.</p>
-        {txnId && <p className="text-gray-300 text-[10px] font-mono mb-6">{txnId}</p>}
-        <button onClick={() => router.push('/')} className="w-full max-w-xs py-3.5 bg-[#e50914] text-white font-bold text-sm rounded-2xl active:bg-[#b20710] mb-3">Go to Home</button>
-        <button onClick={() => setScreen('payment')} className="text-gray-400 text-sm active:text-gray-600">Try payment again</button>
-      </div>
-    )
+    return <PendingScreen plan={selectedPlan} txnId={txnId} onRetry={() => setScreen('payment')} />
   }
 
   // Payment screen — light mode, UPI apps
