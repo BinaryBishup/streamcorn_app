@@ -129,7 +129,7 @@ export default function AuthPage() {
         <PosterBackground />
         <div className="flex-1 flex flex-col items-center justify-center px-8 relative z-10">
           <div className="mb-12">
-            <h1 className="text-[#e50914] font-black text-3xl uppercase tracking-tight">Streamcorn</h1>
+            <img src="/icons/streamcorn_full_logo.png" alt="Streamcorn" className="h-8 mx-auto" />
           </div>
           <div className="text-center mb-12 min-h-[130px]">
             <div className="w-16 h-16 rounded-2xl bg-[#e50914]/15 flex items-center justify-center mx-auto mb-5 text-[#e50914]" key={slideIndex}>
@@ -162,7 +162,7 @@ export default function AuthPage() {
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M15 19l-7-7 7-7"/></svg>
           </button>
           <div className="mb-8">
-            <h1 className="text-[#e50914] font-black text-xl uppercase tracking-tight mb-6">Streamcorn</h1>
+            <img src="/icons/streamcorn_full_logo.png" alt="Streamcorn" className="h-6 mb-6" />
             <h2 className="text-white text-2xl font-bold mb-2">Sign in or create account</h2>
             <p className="text-white/40 text-sm">We'll send a verification code to your phone</p>
           </div>

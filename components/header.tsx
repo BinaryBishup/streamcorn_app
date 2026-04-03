@@ -45,7 +45,7 @@ export function Header() {
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-12 bg-gradient-to-b from-black/90 to-transparent">
-      <Link href="/"><span className="text-[#e50914] font-extrabold text-base uppercase tracking-tight drop-shadow-lg">Streamcorn</span></Link>
+      <Link href="/"><img src="/icons/streamcorn_full_logo.png" alt="Streamcorn" className="h-5 drop-shadow-lg" /></Link>
       <div className="flex items-center gap-2">
         <Link href="/search" className="w-9 h-9 flex items-center justify-center">
           <img src="/icons/search.svg" alt="Search" className="w-5 h-5 drop-shadow" style={{ filter: 'brightness(0) invert(1)' }} />

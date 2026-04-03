@@ -269,7 +269,7 @@ export default function SubscribePage() {
       </div>
       {/* Hero */}
       <div className="bg-[#e50914] px-5 pt-4 pb-8 text-center">
-        <h1 className="text-white font-black text-3xl uppercase tracking-tight mb-2">Streamcorn</h1>
+        <img src="/icons/streamcorn_full_logo.png" alt="Streamcorn" className="h-8 mx-auto mb-2" style={{ filter: 'brightness(0) invert(1)' }} />
         <p className="text-white/90 text-lg font-bold mb-1">{isSubscribed ? 'Upgrade Your Plan' : 'Every Platform. One Price.'}</p>
         <p className="text-white/60 text-sm">{isSubscribed ? `You're on ${sub.plan_name}` : 'Start watching today'}</p>
       </div>
