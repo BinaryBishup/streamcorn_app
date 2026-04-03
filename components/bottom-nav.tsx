@@ -4,49 +4,16 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
 const tabs = [
-  {
-    href: '/',
-    label: 'Home',
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={active ? 0 : 1.5}>
-        <path d="M12 3l9 7.5V21a1 1 0 01-1 1h-5v-7H9v7H4a1 1 0 01-1-1V10.5L12 3z"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/browse',
-    label: 'Browse',
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/search',
-    label: 'Search',
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-      </svg>
-    ),
-  },
-  {
-    href: '/account',
-    label: 'Account',
-    icon: (active: boolean) => (
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.5 : 1.5}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-      </svg>
-    ),
-  },
+  { href: '/', label: 'Home', icon: '/icons/home.svg' },
+  { href: '/browse', label: 'Browse', icon: '/icons/browse.svg' },
+  { href: '/search', label: 'Search', icon: '/icons/search.svg' },
+  { href: '/account', label: 'Account', icon: '/icons/user.svg' },
 ]
 
 export function BottomNav() {
   const pathname = usePathname()
 
-  // Hide on watch, auth, profiles pages
-  if (pathname.startsWith('/watch') || pathname.startsWith('/auth') || pathname === '/profiles') return null
+  if (pathname.startsWith('/watch') || pathname.startsWith('/auth') || pathname === '/profiles' || pathname.startsWith('/subscribe')) return null
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 bg-[#0a0a0a] border-t border-white/[0.06]">
@@ -54,14 +21,13 @@ export function BottomNav() {
         {tabs.map((tab) => {
           const active = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href)
           return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className="flex flex-col items-center gap-0.5 py-1 px-4"
-            >
-              <span className={active ? 'text-[#e50914]' : 'text-white/40'}>
-                {tab.icon(active)}
-              </span>
+            <Link key={tab.href} href={tab.href} className="flex flex-col items-center gap-0.5 py-1 px-4">
+              <img
+                src={tab.icon}
+                alt={tab.label}
+                className="w-[22px] h-[22px]"
+                style={{ filter: active ? 'invert(22%) sepia(95%) saturate(6000%) hue-rotate(355deg) brightness(95%)' : 'invert(1) opacity(0.4)' }}
+              />
               <span className={`text-[10px] font-medium ${active ? 'text-[#e50914]' : 'text-white/40'}`}>
                 {tab.label}
               </span>

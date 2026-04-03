@@ -48,7 +48,7 @@ export function Header() {
       <Link href="/"><span className="text-[#e50914] font-extrabold text-base uppercase tracking-tight drop-shadow-lg">Streamcorn</span></Link>
       <div className="flex items-center gap-2">
         <Link href="/search" className="w-9 h-9 flex items-center justify-center">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2} className="drop-shadow"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <img src="/icons/search.svg" alt="Search" className="w-5 h-5 drop-shadow" style={{ filter: 'invert(1) opacity(0.8)' }} />
         </Link>
         <div className="relative" ref={dropdownRef}>
           <button onClick={() => setShowDropdown(!showDropdown)} className="w-8 h-8 rounded-lg overflow-hidden bg-[#e50914] flex items-center justify-center shadow-lg">
