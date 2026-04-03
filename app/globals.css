@@ -38,3 +38,17 @@ body {
 .safe-bottom {
   padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 1rem);
 }
+
+/* Force landscape for player when orientation lock API is unavailable */
+@media (orientation: portrait) {
+  html.force-landscape body {
+    transform: rotate(90deg);
+    transform-origin: left top;
+    width: 100vh;
+    height: 100vw;
+    overflow: hidden;
+    position: absolute;
+    top: 0;
+    left: 100%;
+  }
+}

@@ -55,10 +55,26 @@ export default function WatchPage() {
   const [showSkipIntro, setShowSkipIntro] = useState(false)
   const [locked, setLocked] = useState(false)
 
-  // Lock to landscape
+  // Force landscape: fullscreen + orientation lock + CSS fallback
   useEffect(() => {
-    try { (screen.orientation as any)?.lock?.('landscape').catch(() => {}) } catch {}
-    return () => { try { (screen.orientation as any)?.unlock?.() } catch {} }
+    const enterLandscape = async () => {
+      try {
+        const el = document.documentElement
+        if (el.requestFullscreen) await el.requestFullscreen()
+        else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen()
+      } catch {}
+      try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
+    }
+    enterLandscape()
+
+    // Add landscape-force class to html
+    document.documentElement.classList.add('force-landscape')
+
+    return () => {
+      document.documentElement.classList.remove('force-landscape')
+      try { (screen.orientation as any)?.unlock?.() } catch {}
+      try { if (document.fullscreenElement) document.exitFullscreen() } catch {}
+    }
   }, [])
 
   // Fetch video source + metadata
