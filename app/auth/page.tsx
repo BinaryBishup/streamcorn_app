@@ -87,35 +87,38 @@ export default function AuthPage() {
   const PosterBackground = () => {
     if (posters.length < 10) return null
     // Build as many rows as we have posters (6 posters per row, fill the screen)
-    const rowSize = 8
+    const rowSize = 7
     const rows: string[][] = []
     for (let i = 0; i < posters.length; i += rowSize) {
       rows.push(posters.slice(i, i + rowSize))
-      if (rows.length >= 7) break // max 7 rows
+      if (rows.length >= 6) break
     }
+    const rowHeight = 145
+    const gap = 8
+    const totalH = rows.length * (rowHeight + gap)
+    const offsetY = `calc(50% - ${totalH / 2}px)`
 
     return (
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
-        {rows.map((row, idx) => {
-          const direction = idx % 2 === 0 ? 'animate-scroll-left' : 'animate-scroll-right'
-          const speed = idx % 3 === 0 ? '' : idx % 3 === 1 ? 'animate-scroll-slow' : ''
-          const top = `${(idx / rows.length) * 100}%`
-          return (
-            <div key={idx} className={`flex gap-2 ${direction} ${speed} absolute`} style={{ top }}>
-              {[...row, ...row].map((p, i) => (
-                <img key={`${idx}-${i}`} src={p} className="w-[80px] h-[120px] rounded-lg object-cover flex-shrink-0" alt="" />
-              ))}
-            </div>
-          )
-        })}
-        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/50 to-black/80" />
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-35">
+        <div className="absolute left-0 right-0" style={{ top: offsetY }}>
+          {rows.map((row, idx) => {
+            const dir = idx % 2 === 0 ? 'poster-scroll-l' : 'poster-scroll-r'
+            return (
+              <div key={idx} className={`flex gap-2 ${dir}`} style={{ marginBottom: `${gap}px` }}>
+                {[...row, ...row].map((p, i) => (
+                  <img key={`${idx}-${i}`} src={p} className="w-[95px] h-[140px] rounded-xl object-cover flex-shrink-0" alt="" loading="eager" />
+                ))}
+              </div>
+            )
+          })}
+        </div>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/40 to-black/80" />
 
         <style dangerouslySetInnerHTML={{ __html: `
-          @keyframes scroll-left { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-          @keyframes scroll-right { 0% { transform: translateX(-50%); } 100% { transform: translateX(0); } }
-          .animate-scroll-left { animation: scroll-left 35s linear infinite; }
-          .animate-scroll-right { animation: scroll-right 35s linear infinite; }
-          .animate-scroll-slow { animation-duration: 50s !important; }
+          @keyframes psl { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+          @keyframes psr { 0% { transform: translateX(-50%); } 100% { transform: translateX(0); } }
+          .poster-scroll-l { animation: psl 45s linear infinite; will-change: transform; }
+          .poster-scroll-r { animation: psr 45s linear infinite; will-change: transform; }
         `}} />
       </div>
     )
@@ -131,12 +134,12 @@ export default function AuthPage() {
           <div className="mb-12">
             <img src="/icons/streamcorn_full_logo.png" alt="Streamcorn" className="h-8 mx-auto" />
           </div>
-          <div className="text-center mb-12 min-h-[130px]">
-            <div className="w-16 h-16 rounded-2xl bg-[#e50914]/15 flex items-center justify-center mx-auto mb-5 text-[#e50914]" key={slideIndex}>
+          <div className="text-center mb-12 min-h-[140px]">
+            <div className="w-16 h-16 rounded-2xl bg-[#e50914]/15 flex items-center justify-center mx-auto mb-5 text-[#e50914] transition-all duration-500 ease-out">
               {slide.icon}
             </div>
-            <h2 className="text-white text-xl font-bold mb-2">{slide.title}</h2>
-            <p className="text-white/50 text-sm">{slide.subtitle}</p>
+            <h2 className="text-white text-xl font-bold mb-2 transition-opacity duration-500" key={`t-${slideIndex}`}>{slide.title}</h2>
+            <p className="text-white/50 text-sm transition-opacity duration-500" key={`s-${slideIndex}`}>{slide.subtitle}</p>
           </div>
           <div className="flex gap-2 mb-12">
             {ONBOARDING.map((_, i) => (
@@ -155,9 +158,8 @@ export default function AuthPage() {
   // Phone
   if (screen === 'phone') {
     return (
-      <div className="min-h-screen bg-black flex flex-col relative">
-        <PosterBackground />
-        <div className="flex-1 flex flex-col justify-center px-6 relative z-10">
+      <div className="min-h-screen bg-black flex flex-col">
+        <div className="flex-1 flex flex-col justify-center px-6">
           <button onClick={() => setScreen('onboarding')} className="absolute top-6 left-4 text-white/40 p-2 z-20">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M15 19l-7-7 7-7"/></svg>
           </button>
@@ -186,9 +188,8 @@ export default function AuthPage() {
 
   // OTP
   return (
-    <div className="min-h-screen bg-black flex flex-col relative">
-      <PosterBackground />
-      <div className="flex-1 flex flex-col justify-center px-6 relative z-10">
+    <div className="min-h-screen bg-black flex flex-col">
+      <div className="flex-1 flex flex-col justify-center px-6">
         <button onClick={() => { setScreen('phone'); setOtp(''); setError('') }} className="absolute top-6 left-4 text-white/40 p-2 z-20">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M15 19l-7-7 7-7"/></svg>
         </button>
