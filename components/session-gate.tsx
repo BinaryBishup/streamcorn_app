@@ -29,6 +29,15 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
 
   const registerSession = useCallback(async () => {
     try {
+      // First check if user even has a subscription — if not, skip session gate
+      const subRes = await fetch('/api/auth/subscription')
+      const subData = await subRes.json()
+      if (!subData.subscribed) {
+        // No subscription — let SubscriptionGate handle it
+        setState('ok')
+        return
+      }
+
       const deviceId = getOrCreateDeviceId()
       const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_id: deviceId }) })
       if (res.status === 401) { setState('ok'); return }
