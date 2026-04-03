@@ -61,10 +61,6 @@ export default async function HomePage() {
     <div className="min-h-screen bg-black">
       <HeroBanner items={hero} />
 
-      <div className="px-4 py-3">
-        <span className="text-lg font-extrabold text-[#e50914] uppercase tracking-tight">Streamcorn</span>
-      </div>
-
       {sections.map((section) => (
         <ContentRow key={section.title} title={section.title} items={section.items} />
       ))}
