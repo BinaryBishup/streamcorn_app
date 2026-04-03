@@ -42,7 +42,7 @@ export default function WatchPage() {
   const [showEps, setShowEps] = useState(false); const [hasNext, setHasNext] = useState(false)
   const [showNextPrompt, setShowNextPrompt] = useState(false)
   const [showSkip, setShowSkip] = useState(false); const [locked, setLocked] = useState(false)
-  const [fit, setFit] = useState<'contain' | 'cover'>('contain')
+  const [fit, setFit] = useState<'contain' | 'cover'>('cover')
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([])
   const [showAudio, setShowAudio] = useState(false)
   const [seekIndicator, setSeekIndicator] = useState<{ side: 'left' | 'right'; seconds: number } | null>(null)
@@ -221,23 +221,31 @@ export default function WatchPage() {
             </div>
             {/* Bottom row: audio/subs left, episode controls right */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                {/* Audio */}
+              <div className="flex items-center gap-5">
                 {audioTracks.length > 1 && (
-                  <button onClick={e => { e.stopPropagation(); setShowAudio(!showAudio) }} className="text-white/60 text-xs flex items-center gap-1 active:text-white">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                    Audio
+                  <button onClick={e => { e.stopPropagation(); setShowAudio(!showAudio) }} className="text-white/60 flex flex-col items-center gap-0.5 active:text-white">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span className="text-[9px]">Audio</span>
                   </button>
                 )}
-                {/* Subtitles */}
-                <button onClick={e => { e.stopPropagation(); setSubsEnabled(!subsEnabled) }} className={`text-xs flex items-center gap-1 active:opacity-70 ${subsEnabled ? 'text-[#e50914]' : 'text-white/60'}`}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h4M14 12h4M6 16h12"/></svg>
-                  CC
+                <button onClick={e => { e.stopPropagation(); setSubsEnabled(!subsEnabled) }} className={`flex flex-col items-center gap-0.5 active:opacity-70 ${subsEnabled ? 'text-[#e50914]' : 'text-white/60'}`}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h4M14 12h4M6 16h12"/></svg>
+                  <span className="text-[9px]">Subtitles</span>
                 </button>
               </div>
-              <div className="flex items-center gap-3">
-                {type === 'tv' && hasNext && <button onClick={handleNextEp} className="text-white/60 active:text-white"><svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l12 8-12 8zM18 4h2v16h-2z"/></svg></button>}
-                {type === 'tv' && episodes.length > 0 && <button onClick={e => { e.stopPropagation(); setShowEps(true) }} className="text-white/60 active:text-white"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>}
+              <div className="flex items-center gap-5">
+                {type === 'tv' && hasNext && (
+                  <button onClick={handleNextEp} className="text-white/60 flex flex-col items-center gap-0.5 active:text-white">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l12 8-12 8zM18 4h2v16h-2z"/></svg>
+                    <span className="text-[9px]">Next</span>
+                  </button>
+                )}
+                {type === 'tv' && episodes.length > 0 && (
+                  <button onClick={e => { e.stopPropagation(); setShowEps(true) }} className="text-white/60 flex flex-col items-center gap-0.5 active:text-white">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    <span className="text-[9px]">Episodes</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

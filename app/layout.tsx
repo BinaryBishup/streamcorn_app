@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { BottomNav } from "@/components/bottom-nav";
 import { Header } from "@/components/header";
 import { SessionGate } from "@/components/session-gate";
+import { SubscriptionGate } from "@/components/subscription-gate";
 import "./globals.css";
 
 const inter = Inter({
@@ -40,11 +41,13 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="font-sans antialiased bg-black text-white min-h-screen">
         <Header />
-        <SessionGate>
-          <main className="pb-20">
-            {children}
-          </main>
-        </SessionGate>
+        <SubscriptionGate>
+          <SessionGate>
+            <main className="pb-20">
+              {children}
+            </main>
+          </SessionGate>
+        </SubscriptionGate>
         <BottomNav />
       </body>
     </html>

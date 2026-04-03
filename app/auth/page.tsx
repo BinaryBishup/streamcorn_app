@@ -68,7 +68,7 @@ export default function AuthPage() {
     const row2 = posters.slice(10, 20)
     const row3 = posters.slice(20, 30)
     return (
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
         <div className="flex gap-2 animate-scroll-left absolute top-[5%]">
           {[...row1, ...row1].map((p, i) => (
             <img key={`a-${i}`} src={p} className="w-[90px] h-[135px] rounded-lg object-cover flex-shrink-0" alt="" />
@@ -84,7 +84,7 @@ export default function AuthPage() {
             <img key={`c-${i}`} src={p} className="w-[90px] h-[135px] rounded-lg object-cover flex-shrink-0" alt="" />
           ))}
         </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black via-black/70 to-black" />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/50 to-black/90" />
 
         <style dangerouslySetInnerHTML={{ __html: `
           @keyframes scroll-left { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
