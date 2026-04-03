@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
+import { signOut } from '@/lib/sign-out'
 
 export default function AccountPage() {
   const [user, setUser] = useState<any>(null)
@@ -16,16 +16,7 @@ export default function AccountPage() {
 
   const handleSignOut = async () => {
     setSigningOut(true)
-    try {
-      const supabase = createClient()
-      const deviceId = localStorage.getItem('streamcorn_device_id')
-      if (deviceId && user?.id) {
-        await supabase.from('active_sessions').delete().eq('user_id', user.id).eq('device_id', deviceId)
-      }
-      await supabase.auth.signOut()
-    } catch {}
-    localStorage.clear()
-    window.location.href = '/auth'
+    await signOut()
   }
 
   const isSubscribed = sub && sub.status === 'active'

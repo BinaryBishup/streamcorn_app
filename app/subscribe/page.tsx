@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { signOut } from '@/lib/sign-out'
 
 const UPI_ID = process.env.NEXT_PUBLIC_UPI_ID || ''
 
@@ -78,11 +79,9 @@ function PendingScreen({ plan, txnId, onRetry, initialSeconds }: { plan: typeof 
   const seconds = timeLeft % 60
   const progress = timeLeft / (30 * 60)
 
-  const signOut = () => { localStorage.clear(); window.location.href = '/auth' }
-
   return (
     <div className="min-h-screen bg-[#f5f5f5] flex flex-col items-center justify-center px-6 text-center relative">
-      <button onClick={signOut} className="absolute top-5 right-5 text-gray-400 text-sm font-medium px-4 py-1.5 rounded-full border border-gray-200 active:bg-gray-100">Sign Out</button>
+      <button onClick={() => signOut()} className="absolute top-5 right-5 text-gray-400 text-sm font-medium px-4 py-1.5 rounded-full border border-gray-200 active:bg-gray-100">Sign Out</button>
       {!timedOut ? (
         <>
           {/* Circular timer */}
@@ -190,7 +189,7 @@ export default function SubscribePage() {
             <p className="text-gray-900 font-semibold text-sm">Complete Payment</p>
             <p className="text-gray-400 text-xs">Streamcorn Subscription</p>
           </div>
-          <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-gray-400 text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 active:bg-gray-50">
+          <button onClick={() => signOut()} className="text-gray-400 text-xs font-medium px-3 py-1.5 rounded-full border border-gray-200 active:bg-gray-50">
             Sign Out
           </button>
         </div>
@@ -264,7 +263,7 @@ export default function SubscribePage() {
       {/* Header with sign out */}
       <div className="flex items-center justify-between px-5 pt-4 bg-[#e50914]">
         <span />
-        <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="text-white/80 text-sm font-medium px-4 py-1.5 rounded-full border border-white/30 active:bg-white/10">
+        <button onClick={() => signOut()} className="text-white/80 text-sm font-medium px-4 py-1.5 rounded-full border border-white/30 active:bg-white/10">
           Sign Out
         </button>
       </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { signOut } from '@/lib/sign-out'
 
 interface Session {
   id: string; device_id: string; device_name: string | null; device_type: string | null; last_active: string
@@ -78,7 +79,7 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
         <div>
           <h1 className="text-xl font-bold text-white mb-2">Session Ended</h1>
           <p className="text-white/40 text-sm mb-6">You were signed out from another device.</p>
-          <button onClick={() => { localStorage.removeItem('streamcorn_device_id'); window.location.href = '/auth' }} className="px-6 py-3 bg-[#e50914] text-white font-bold rounded-xl text-sm">Sign In Again</button>
+          <button onClick={() => signOut()} className="px-6 py-3 bg-[#e50914] text-white font-bold rounded-xl text-sm">Sign In Again</button>
         </div>
       </div>
     )
@@ -105,7 +106,7 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
         ))}
       </div>
       <Link href="/subscribe" className="block w-full py-3 bg-[#e50914] text-white font-bold text-sm rounded-xl text-center active:bg-[#b20710]">Upgrade Plan</Link>
-      <button onClick={() => { localStorage.clear(); window.location.href = '/auth' }} className="w-full mt-3 text-white/40 text-sm py-2">Sign Out</button>
+      <button onClick={() => signOut()} className="w-full mt-3 text-white/40 text-sm py-2">Sign Out</button>
     </div>
   )
 }
