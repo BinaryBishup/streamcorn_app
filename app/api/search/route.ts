@@ -8,14 +8,14 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = await createClient()
-  const searchLower = query.toLowerCase()
+  const q = query.toLowerCase().trim()
 
-  // Search by title (ilike) and tags, using cached columns
+  // Search by title (ilike), tags, and genres
   const { data: content, error } = await supabase
     .from('content')
     .select('tmdb_id, type, title, poster_path, backdrop_path, rating, year, overview, genres')
     .not('title', 'is', null)
-    .or(`title.ilike.%${searchLower}%,tags.cs.{${searchLower}}`)
+    .or(`title.ilike.%${q}%,tags.cs.{${q}},genres.cs.{"${q[0].toUpperCase() + q.slice(1)}"}`)
     .order('rating', { ascending: false })
     .limit(30)
 
@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     rating: item.rating || 0,
     year: item.year ? String(item.year) : '',
     overview: item.overview || '',
-    genres: [],
+    genres: item.genres || [],
   }))
 
   return NextResponse.json({ results })
