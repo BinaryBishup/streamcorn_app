@@ -4,9 +4,31 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 const ONBOARDING = [
-  { title: 'Unlimited Entertainment', subtitle: 'Movies, shows, and more. All in one place.', emoji: '🎬' },
-  { title: 'Watch Anywhere', subtitle: 'Stream on your phone, tablet, or TV.', emoji: '📱' },
-  { title: 'No Commitments', subtitle: 'Cancel anytime. No hidden fees.', emoji: '✨' },
+  {
+    title: 'Unlimited Entertainment',
+    subtitle: 'Movies, shows, and more. All in one place.',
+    icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>,
+  },
+  {
+    title: 'Watch Anywhere',
+    subtitle: 'Stream on your phone, tablet, or TV.',
+    icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="7" width="7" height="10" rx="1"/><rect x="11" y="3" width="11" height="18" rx="2"/></svg>,
+  },
+  {
+    title: 'No Commitments',
+    subtitle: 'Cancel anytime. No hidden fees.',
+    icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>,
+  },
+  {
+    title: 'All Platforms',
+    subtitle: 'Netflix, Prime, Apple TV+ and more.',
+    icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0zM3.6 9h16.8M3.6 15h16.8"/><ellipse cx="12" cy="12" rx="4" ry="9"/></svg>,
+  },
+  {
+    title: 'Download & Watch',
+    subtitle: 'Save content for offline viewing.',
+    icon: <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>,
+  },
 ]
 
 export default function AuthPage() {
@@ -22,7 +44,7 @@ export default function AuthPage() {
 
   // Fetch posters for background
   useEffect(() => {
-    fetch('/api/content?limit=30')
+    fetch('/api/content?limit=56')
       .then(r => r.json())
       .then(d => setPosters((d.items || []).filter((i: any) => i.poster_path).map((i: any) => `https://image.tmdb.org/t/p/w185${i.poster_path}`)))
       .catch(() => {})
@@ -64,34 +86,36 @@ export default function AuthPage() {
   // Animated poster rows
   const PosterBackground = () => {
     if (posters.length < 10) return null
-    const row1 = posters.slice(0, 10)
-    const row2 = posters.slice(10, 20)
-    const row3 = posters.slice(20, 30)
+    // Build as many rows as we have posters (6 posters per row, fill the screen)
+    const rowSize = 8
+    const rows: string[][] = []
+    for (let i = 0; i < posters.length; i += rowSize) {
+      rows.push(posters.slice(i, i + rowSize))
+      if (rows.length >= 7) break // max 7 rows
+    }
+
     return (
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-40">
-        <div className="flex gap-2 animate-scroll-left absolute top-[5%]">
-          {[...row1, ...row1].map((p, i) => (
-            <img key={`a-${i}`} src={p} className="w-[90px] h-[135px] rounded-lg object-cover flex-shrink-0" alt="" />
-          ))}
-        </div>
-        <div className="flex gap-2 animate-scroll-right absolute top-[35%]">
-          {[...row2, ...row2].map((p, i) => (
-            <img key={`b-${i}`} src={p} className="w-[90px] h-[135px] rounded-lg object-cover flex-shrink-0" alt="" />
-          ))}
-        </div>
-        <div className="flex gap-2 animate-scroll-left-slow absolute top-[65%]">
-          {[...row3, ...row3].map((p, i) => (
-            <img key={`c-${i}`} src={p} className="w-[90px] h-[135px] rounded-lg object-cover flex-shrink-0" alt="" />
-          ))}
-        </div>
-        <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-black/50 to-black/90" />
+        {rows.map((row, idx) => {
+          const direction = idx % 2 === 0 ? 'animate-scroll-left' : 'animate-scroll-right'
+          const speed = idx % 3 === 0 ? '' : idx % 3 === 1 ? 'animate-scroll-slow' : ''
+          const top = `${(idx / rows.length) * 100}%`
+          return (
+            <div key={idx} className={`flex gap-2 ${direction} ${speed} absolute`} style={{ top }}>
+              {[...row, ...row].map((p, i) => (
+                <img key={`${idx}-${i}`} src={p} className="w-[80px] h-[120px] rounded-lg object-cover flex-shrink-0" alt="" />
+              ))}
+            </div>
+          )
+        })}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-black/50 to-black/80" />
 
         <style dangerouslySetInnerHTML={{ __html: `
           @keyframes scroll-left { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
           @keyframes scroll-right { 0% { transform: translateX(-50%); } 100% { transform: translateX(0); } }
-          .animate-scroll-left { animation: scroll-left 40s linear infinite; }
-          .animate-scroll-right { animation: scroll-right 40s linear infinite; }
-          .animate-scroll-left-slow { animation: scroll-left 55s linear infinite; }
+          .animate-scroll-left { animation: scroll-left 35s linear infinite; }
+          .animate-scroll-right { animation: scroll-right 35s linear infinite; }
+          .animate-scroll-slow { animation-duration: 50s !important; }
         `}} />
       </div>
     )
@@ -107,8 +131,10 @@ export default function AuthPage() {
           <div className="mb-12">
             <h1 className="text-[#e50914] font-black text-3xl uppercase tracking-tight">Streamcorn</h1>
           </div>
-          <div className="text-center mb-12 min-h-[120px]">
-            <div className="text-5xl mb-4" key={slideIndex}>{slide.emoji}</div>
+          <div className="text-center mb-12 min-h-[130px]">
+            <div className="w-16 h-16 rounded-2xl bg-[#e50914]/15 flex items-center justify-center mx-auto mb-5 text-[#e50914]" key={slideIndex}>
+              {slide.icon}
+            </div>
             <h2 className="text-white text-xl font-bold mb-2">{slide.title}</h2>
             <p className="text-white/50 text-sm">{slide.subtitle}</p>
           </div>
