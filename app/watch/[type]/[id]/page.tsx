@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Hls from 'hls.js'
+import { useWatchProgress } from '@/lib/watch-progress'
 
 const HLS_KEY_HEX = process.env.NEXT_PUBLIC_HLS_KEY || ''
 const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
@@ -48,6 +49,21 @@ export default function WatchPage() {
   const [seekIndicator, setSeekIndicator] = useState<{ side: 'left' | 'right'; seconds: number } | null>(null)
   const [showSubs, setShowSubs] = useState(false)
   const [subsEnabled, setSubsEnabled] = useState(false)
+
+  // Watch progress — save & resume
+  const profileId = typeof window !== 'undefined' ? localStorage.getItem('streamcorn_profile_id') : null
+  const { resumePosition, loading: progressLoading, updateTime, saveProgress } = useWatchProgress({
+    profileId,
+    tmdbId: parseInt(id),
+    mediaType: type as 'movie' | 'tv',
+    seasonNumber: type === 'tv' ? season : undefined,
+    episodeNumber: type === 'tv' ? episode : undefined,
+  })
+
+  // Save progress on unmount
+  useEffect(() => {
+    return () => { saveProgress() }
+  }, [saveProgress])
 
   // Force landscape
   useEffect(() => {
@@ -105,20 +121,30 @@ export default function WatchPage() {
       }
       const hls = new Hls({ enableWorker: true, loader: CL as any })
       hls.loadSource(src); hls.attachMedia(v)
-      hls.on(Hls.Events.MANIFEST_PARSED, () => { v.play().catch(() => {}); setLoading(false) })
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        if (resumePosition && v) v.currentTime = resumePosition
+        v.play().catch(() => {})
+        setLoading(false)
+      })
       hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => setAudioTracks(hls.audioTracks.map((t, i) => ({ id: i, label: t.name || t.lang?.toUpperCase() || `Track ${i + 1}`, lang: t.lang || '' }))))
       hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) { if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad(); else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError() } })
       hlsRef.current = hls
-    } else { v.src = src; v.play().catch(() => {}); setLoading(false) }
+    } else {
+      v.src = src
+      if (resumePosition) v.currentTime = resumePosition
+      v.play().catch(() => {})
+      setLoading(false)
+    }
     return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null } }
   }, [src])
 
   const onTimeUpdate = useCallback(() => {
     const v = videoRef.current; if (!v || seeking) return
     setCt(v.currentTime); setDur(v.duration || 0); setPlaying(!v.paused)
+    updateTime(v.currentTime, v.duration || 0)
     setShowSkip(v.currentTime >= 15 && v.currentTime < 75)
     if (type === 'tv' && hasNext && v.duration && v.currentTime > v.duration - 30) setShowNextPrompt(true); else setShowNextPrompt(false)
-  }, [seeking, type, hasNext])
+  }, [seeking, type, hasNext, updateTime])
 
   const resetTimer = () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); setShowControls(true); controlsTimer.current = setTimeout(() => setShowControls(false), 4000) }
 
