@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { BottomNav } from "@/components/bottom-nav";
 import { Header } from "@/components/header";
+import { SessionGate } from "@/components/session-gate";
 import "./globals.css";
 
 const inter = Inter({
@@ -39,9 +40,11 @@ export default function RootLayout({
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="font-sans antialiased bg-black text-white min-h-screen">
         <Header />
-        <main className="pb-24">
-          {children}
-        </main>
+        <SessionGate>
+          <main className="pb-20">
+            {children}
+          </main>
+        </SessionGate>
         <BottomNav />
       </body>
     </html>

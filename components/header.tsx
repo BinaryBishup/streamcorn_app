@@ -6,7 +6,8 @@ import { usePathname } from 'next/navigation'
 export function Header() {
   const pathname = usePathname()
 
-  if (pathname.startsWith('/watch') || pathname.startsWith('/detail')) return null
+  // Only show on home page
+  if (pathname !== '/') return null
 
   return (
     <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-11 bg-gradient-to-b from-black/80 to-transparent">

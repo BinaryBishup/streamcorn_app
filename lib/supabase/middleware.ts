@@ -23,9 +23,26 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Refresh session
-  await supabase.auth.getUser()
+  const { data: { user } } = await supabase.auth.getUser()
+  const pathname = request.nextUrl.pathname
 
-  // No route protection for now — auth will be added later
+  const isAuthPage = pathname.startsWith('/auth')
+  const isPublicApi = pathname.startsWith('/api/')
+  const isProtected = !isAuthPage && !isPublicApi && !pathname.startsWith('/_next') && !pathname.startsWith('/favicon')
+
+  // Unauthenticated → /auth
+  if (!user && isProtected) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/auth'
+    return NextResponse.redirect(url)
+  }
+
+  // Authenticated on /auth → /profiles
+  if (user && isAuthPage) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/profiles'
+    return NextResponse.redirect(url)
+  }
+
   return supabaseResponse
 }
