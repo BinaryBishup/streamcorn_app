@@ -48,7 +48,7 @@ export function Header() {
       <Link href="/"><span className="text-[#e50914] font-extrabold text-base uppercase tracking-tight drop-shadow-lg">Streamcorn</span></Link>
       <div className="flex items-center gap-2">
         <Link href="/search" className="w-9 h-9 flex items-center justify-center">
-          <img src="/icons/search.svg" alt="Search" className="w-5 h-5 drop-shadow" style={{ filter: 'invert(1) opacity(0.8)' }} />
+          <img src="/icons/search.svg" alt="Search" className="w-5 h-5 drop-shadow" style={{ filter: 'brightness(0) invert(1)' }} />
         </Link>
         <div className="relative" ref={dropdownRef}>
           <button onClick={() => setShowDropdown(!showDropdown)} className="w-8 h-8 rounded-lg overflow-hidden bg-[#e50914] flex items-center justify-center shadow-lg">

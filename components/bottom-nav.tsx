@@ -3,35 +3,11 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-const HomeIcon = ({ active }: { active: boolean }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={active ? 0 : 1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 10.5L12 3l9 7.5V21a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1V10.5z"/>
-  </svg>
-)
-
-const BrowseIcon = ({ active }: { active: boolean }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16"/>
-  </svg>
-)
-
-const SearchIcon = ({ active }: { active: boolean }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-  </svg>
-)
-
-const AccountIcon = ({ active }: { active: boolean }) => (
-  <svg width="22" height="22" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth={active ? 0 : 1.5}>
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
-  </svg>
-)
-
 const tabs = [
-  { href: '/', label: 'Home', Icon: HomeIcon },
-  { href: '/browse', label: 'Browse', Icon: BrowseIcon },
-  { href: '/search', label: 'Search', Icon: SearchIcon },
-  { href: '/account', label: 'Account', Icon: AccountIcon },
+  { href: '/', label: 'Home', icon: '/icons/home.svg' },
+  { href: '/browse', label: 'Browse', icon: '/icons/browse.svg' },
+  { href: '/search', label: 'Search', icon: '/icons/search.svg' },
+  { href: '/account', label: 'Account', icon: '/icons/user.svg' },
 ]
 
 export function BottomNav() {
@@ -46,10 +22,13 @@ export function BottomNav() {
           const active = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href)
           return (
             <Link key={tab.href} href={tab.href} className="flex flex-col items-center justify-center gap-1 flex-1 py-2">
-              <span className={active ? 'text-[#e50914]' : 'text-white/40'}>
-                <tab.Icon active={active} />
-              </span>
-              <span className={`text-[10px] font-medium ${active ? 'text-[#e50914]' : 'text-white/40'}`}>
+              <img
+                src={tab.icon}
+                alt={tab.label}
+                className="w-[22px] h-[22px]"
+                style={{ filter: active ? 'brightness(0) invert(1)' : 'brightness(0) invert(1) opacity(0.4)' }}
+              />
+              <span className={`text-[10px] font-medium ${active ? 'text-white' : 'text-white/40'}`}>
                 {tab.label}
               </span>
             </Link>
