@@ -33,9 +33,9 @@ const UPI_APPS = [
   { name: 'Other UPI App', scheme: 'upi://pay', icon: '/icons/upi.svg', color: '#3d8168' },
 ]
 
-function PendingScreen({ plan, txnId, onRetry }: { plan: typeof PLANS[0]; txnId: string | null; onRetry: () => void }) {
+function PendingScreen({ plan, txnId, onRetry, initialSeconds }: { plan: typeof PLANS[0]; txnId: string | null; onRetry: () => void; initialSeconds?: number }) {
   const router = useRouter()
-  const [timeLeft, setTimeLeft] = useState(30 * 60) // 30 minutes
+  const [timeLeft, setTimeLeft] = useState(initialSeconds || 30 * 60)
   const [timedOut, setTimedOut] = useState(false)
 
   // Countdown timer
@@ -104,7 +104,7 @@ function PendingScreen({ plan, txnId, onRetry }: { plan: typeof PLANS[0]; txnId:
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
             Check Now
           </button>
-          <button onClick={onRetry} className="text-gray-400 text-sm active:text-gray-600">Pay again</button>
+          <button onClick={onRetry} className="text-gray-400 text-sm active:text-gray-600">Haven't paid yet? Make payment</button>
         </>
       ) : (
         <>
@@ -129,9 +129,23 @@ export default function SubscribePage() {
   const [screen, setScreen] = useState<'plans' | 'payment' | 'pending'>('plans')
   const [txnId, setTxnId] = useState<string | null>(null)
   const [processing, setProcessing] = useState(false)
+  const [pendingSeconds, setPendingSeconds] = useState<number | undefined>(undefined)
 
   useEffect(() => {
-    fetch('/api/auth/subscription').then(r => r.json()).then(d => { setSub(d.subscription); setLoading(false) }).catch(() => setLoading(false))
+    fetch('/api/auth/subscription').then(r => r.json()).then(d => {
+      setSub(d.subscription)
+      if (d.pending_payment) {
+        const pp = d.pending_payment
+        const plan = PLANS.find(p => p.price === pp.price) || PLANS.find(p => p.devices === pp.max_devices)
+        if (plan) {
+          setSelectedPlan(plan)
+          setTxnId(pp.transaction_id)
+          setPendingSeconds(pp.seconds_remaining)
+          setScreen('pending')
+        }
+      }
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
   const isSubscribed = sub && sub.status === 'active' && new Date(sub.ends_at) > new Date()
@@ -157,7 +171,7 @@ export default function SubscribePage() {
 
   // Pending screen — light mode with timer
   if (screen === 'pending' && selectedPlan) {
-    return <PendingScreen plan={selectedPlan} txnId={txnId} onRetry={() => setScreen('payment')} />
+    return <PendingScreen plan={selectedPlan} txnId={txnId} onRetry={() => setScreen('payment')} initialSeconds={pendingSeconds} />
   }
 
   // Payment screen — light mode, UPI apps
