@@ -6,7 +6,6 @@ import { usePathname } from 'next/navigation'
 export function Header() {
   const pathname = usePathname()
 
-  // Only show on home page
   if (pathname !== '/') return null
 
   return (
