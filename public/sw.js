@@ -33,6 +33,9 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return
 
+  // Never cache JS/CSS chunks from Next.js — they have content hashes and must stay fresh
+  if (request.url.includes('/_next/')) return
+
   // Network-first for API calls and navigation
   if (request.url.includes('/api/') || request.mode === 'navigate') {
     event.respondWith(
