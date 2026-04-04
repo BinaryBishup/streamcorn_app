@@ -23,6 +23,7 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
   const [maxDevices, setMaxDevices] = useState(1)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const kickedRef = useRef(false)
+  const sessionRegisteredRef = useRef(false)
 
   const isProtected = pathname === '/' || pathname.startsWith('/browse') || pathname.startsWith('/watch') || pathname.startsWith('/detail') || pathname.startsWith('/account') || pathname.startsWith('/profiles') || pathname.startsWith('/movies') || pathname.startsWith('/shows') || pathname.startsWith('/search') || pathname.startsWith('/mylist')
   const isSubscribePage = pathname.startsWith('/subscribe')
@@ -34,19 +35,22 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
       const subData = await subRes.json()
       if (!subData.subscribed) {
         // No subscription — let SubscriptionGate handle it
+        sessionRegisteredRef.current = false
         setState('ok')
         return
       }
 
       const deviceId = getOrCreateDeviceId()
       const res = await fetch('/api/sessions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_id: deviceId }) })
-      if (res.status === 401) { setState('ok'); return }
+      if (res.status === 401) { sessionRegisteredRef.current = false; setState('ok'); return }
       const data = await res.json()
       if (res.status === 409 && data.limitReached) {
+        sessionRegisteredRef.current = false
         setSessions(data.sessions || []); setMaxDevices(data.maxDevices || 1); setState('limit'); return
       }
+      sessionRegisteredRef.current = true
       setState('ok')
-    } catch { setState('ok') }
+    } catch { sessionRegisteredRef.current = false; setState('ok') }
   }, [])
 
   useEffect(() => {
@@ -54,9 +58,9 @@ export function SessionGate({ children }: { children: React.ReactNode }) {
     registerSession()
   }, [isProtected, isSubscribePage, registerSession])
 
-  // Heartbeat
+  // Heartbeat — only runs when a session was actually registered
   useEffect(() => {
-    if (!isProtected || state !== 'ok') return
+    if (!isProtected || state !== 'ok' || !sessionRegisteredRef.current) return
     const interval = setInterval(async () => {
       if (kickedRef.current) return
       try {

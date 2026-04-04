@@ -60,6 +60,20 @@ export default function WatchPage() {
     episodeNumber: type === 'tv' ? episode : undefined,
   })
 
+  // Track resumePosition in a ref so HLS callback always sees latest value
+  const resumeRef = useRef<number | null>(null)
+  useEffect(() => { resumeRef.current = resumePosition }, [resumePosition])
+
+  // Apply resume position when it loads AFTER HLS is already ready
+  const hasResumedRef = useRef(false)
+  useEffect(() => {
+    const v = videoRef.current
+    if (v && resumePosition != null && !hasResumedRef.current && v.readyState >= 1) {
+      v.currentTime = resumePosition
+      hasResumedRef.current = true
+    }
+  }, [resumePosition])
+
   // Save progress on unmount
   useEffect(() => {
     return () => { saveProgress() }
@@ -122,7 +136,10 @@ export default function WatchPage() {
       const hls = new Hls({ enableWorker: true, loader: CL as any })
       hls.loadSource(src); hls.attachMedia(v)
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        if (resumePosition && v) v.currentTime = resumePosition
+        if (resumeRef.current != null && v) {
+          v.currentTime = resumeRef.current
+          hasResumedRef.current = true
+        }
         v.play().catch(() => {})
         setLoading(false)
       })
@@ -131,7 +148,10 @@ export default function WatchPage() {
       hlsRef.current = hls
     } else {
       v.src = src
-      if (resumePosition) v.currentTime = resumePosition
+      if (resumeRef.current != null) {
+        v.currentTime = resumeRef.current
+        hasResumedRef.current = true
+      }
       v.play().catch(() => {})
       setLoading(false)
     }

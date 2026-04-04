@@ -30,18 +30,25 @@ export async function updateSession(request: NextRequest) {
   const isPublicApi = pathname.startsWith('/api/')
   const isProtected = !isAuthPage && !isPublicApi && !pathname.startsWith('/_next') && !pathname.startsWith('/favicon')
 
+  // Helper: create a redirect that preserves refreshed auth cookies
+  function redirectWithCookies(to: string) {
+    const url = request.nextUrl.clone()
+    url.pathname = to
+    const redirectResponse = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(cookie => {
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    })
+    return redirectResponse
+  }
+
   // Unauthenticated → /auth
   if (!user && isProtected) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth'
-    return NextResponse.redirect(url)
+    return redirectWithCookies('/auth')
   }
 
   // Authenticated on /auth → /profiles
   if (user && isAuthPage) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/profiles'
-    return NextResponse.redirect(url)
+    return redirectWithCookies('/profiles')
   }
 
   return supabaseResponse

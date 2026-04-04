@@ -5,11 +5,9 @@ export async function signOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
   } catch {}
-  localStorage.clear()
-  // Clear all cookies by setting them expired
-  document.cookie.split(';').forEach(c => {
-    const name = c.split('=')[0].trim()
-    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
-  })
+  // Only remove Streamcorn-specific keys — supabase.auth.signOut() handles auth cookies
+  localStorage.removeItem('streamcorn_device_id')
+  localStorage.removeItem('streamcorn_profile_id')
+  localStorage.removeItem('streamcorn_profile_name')
   window.location.href = '/auth'
 }
