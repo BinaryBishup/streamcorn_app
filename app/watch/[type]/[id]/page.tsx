@@ -64,8 +64,11 @@ export default function WatchPage() {
   const resumeRef = useRef<number | null>(null)
   useEffect(() => { resumeRef.current = resumePosition }, [resumePosition])
 
-  // Apply resume position when it loads AFTER HLS is already ready
+  // Reset resume tracking when episode changes
   const hasResumedRef = useRef(false)
+  useEffect(() => { hasResumedRef.current = false }, [season, episode])
+
+  // Apply resume position when it loads AFTER HLS is already ready
   useEffect(() => {
     const v = videoRef.current
     if (v && resumePosition != null && !hasResumedRef.current && v.readyState >= 1) {

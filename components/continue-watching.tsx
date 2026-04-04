@@ -28,7 +28,20 @@ export function ContinueWatching() {
         const { items: progress } = await res.json()
         if (!progress?.length) return
 
-        const incomplete = progress.filter((p: ProgressItem) => !p.completed && p.progress_seconds > 10).slice(0, 10)
+        const filtered = progress.filter((p: ProgressItem) => !p.completed && p.progress_seconds > 10)
+
+        // Deduplicate: for TV shows, keep only the most recent episode per show
+        const deduped: ProgressItem[] = []
+        const seenTVShows = new Set<number>()
+        for (const p of filtered) {
+          if (p.type === 'tv') {
+            if (seenTVShows.has(p.tmdb_id)) continue
+            seenTVShows.add(p.tmdb_id)
+          }
+          deduped.push(p)
+        }
+
+        const incomplete = deduped.slice(0, 10)
         if (!incomplete.length) return
 
         const enriched = await Promise.all(incomplete.map(async (p: ProgressItem) => {
@@ -59,7 +72,7 @@ export function ContinueWatching() {
           const href = item.type === 'movie' ? `/watch/movie/${item.tmdb_id}` : `/watch/tv/${item.tmdb_id}?s=${item.season_number || 1}&e=${item.episode_number || 1}`
 
           return (
-            <Link key={`${item.type}-${item.tmdb_id}`} href={href} className="flex-shrink-0 w-[155px]">
+            <Link key={`${item.type}-${item.tmdb_id}-${item.season_number}-${item.episode_number}`} href={href} className="flex-shrink-0 w-[155px]">
               <div className="relative aspect-video rounded-lg overflow-hidden bg-[#1a1a1a]">
                 {img && <img src={img} alt={item.title} className="w-full h-full object-cover" />}
                 <div className="absolute inset-0 flex items-center justify-center">

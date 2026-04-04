@@ -137,6 +137,23 @@ export function useWatchProgress({
     }
   }, [profileId, tmdbId, mediaType, saveProgress])
 
+  // Save on visibilitychange / pagehide (critical for mobile browsers)
+  useEffect(() => {
+    if (!profileId || !tmdbId || !mediaType) return
+
+    const handleSave = () => {
+      if (currentTimeRef.current > 5) saveProgress()
+    }
+    const onVisChange = () => { if (document.visibilityState === 'hidden') handleSave() }
+
+    document.addEventListener('visibilitychange', onVisChange)
+    window.addEventListener('pagehide', handleSave)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisChange)
+      window.removeEventListener('pagehide', handleSave)
+    }
+  }, [profileId, tmdbId, mediaType, saveProgress])
+
   return { resumePosition, loading, updateTime, saveProgress }
 }
 
