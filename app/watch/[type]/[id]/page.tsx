@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Hls from 'hls.js'
-import { useWatchProgress } from '@/lib/watch-progress'
+import { getResumePosition, saveProgress, beaconProgress, buildPayload } from '@/lib/watch-progress'
 
 const HLS_KEY_HEX = process.env.NEXT_PUBLIC_HLS_KEY || ''
 const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
@@ -50,37 +50,71 @@ export default function WatchPage() {
   const [showSubs, setShowSubs] = useState(false)
   const [subsEnabled, setSubsEnabled] = useState(false)
 
-  // Watch progress — save & resume
-  const profileId = typeof window !== 'undefined' ? localStorage.getItem('streamcorn_profile_id') : null
-  const { resumePosition, loading: progressLoading, updateTime, saveProgress } = useWatchProgress({
-    profileId,
-    tmdbId: parseInt(id),
-    mediaType: type as 'movie' | 'tv',
-    seasonNumber: type === 'tv' ? season : undefined,
-    episodeNumber: type === 'tv' ? episode : undefined,
-  })
+  // ── Watch progress (direct, no hook) ────────────────────────────────────
+  const [profileId] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('streamcorn_profile_id') : null)
+  const tmdbId = parseInt(id)
+  const mediaType = type as 'movie' | 'tv'
+  const seasonNum = type === 'tv' ? season : undefined
+  const episodeNum = type === 'tv' ? episode : undefined
 
-  // Track resumePosition in a ref so HLS callback always sees latest value
   const resumeRef = useRef<number | null>(null)
-  useEffect(() => { resumeRef.current = resumePosition }, [resumePosition])
+  const lastSavedAt = useRef(0) // timestamp of last save
+  const lastSavedTime = useRef(0) // video currentTime at last save
 
-  // Reset resume tracking when episode changes
-  const hasResumedRef = useRef(false)
-  useEffect(() => { hasResumedRef.current = false }, [season, episode])
-
-  // Apply resume position when it loads AFTER HLS is already ready
-  useEffect(() => {
+  // Helper: build payload from current video state
+  const getPayload = useCallback(() => {
     const v = videoRef.current
-    if (v && resumePosition != null && !hasResumedRef.current && v.readyState >= 1) {
-      v.currentTime = resumePosition
-      hasResumedRef.current = true
-    }
-  }, [resumePosition])
+    if (!v || !profileId || !v.duration || v.duration < 10 || v.currentTime < 5) return null
+    return buildPayload(profileId, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)
+  }, [profileId, tmdbId, mediaType, seasonNum, episodeNum])
 
-  // Save progress on unmount
+  // Fetch resume position when content/episode changes
   useEffect(() => {
-    return () => { saveProgress() }
-  }, [saveProgress])
+    resumeRef.current = null
+    if (!profileId) return
+    let cancelled = false
+    getResumePosition(profileId, tmdbId, mediaType, seasonNum, episodeNum).then((pos) => {
+      if (!cancelled) resumeRef.current = pos
+    })
+    return () => { cancelled = true }
+  }, [profileId, tmdbId, mediaType, seasonNum, episodeNum])
+
+  // Periodic save: every 10s if position changed enough
+  useEffect(() => {
+    if (!profileId) return
+    const interval = setInterval(() => {
+      const v = videoRef.current
+      if (!v || v.paused) return
+      if (v.currentTime < 5 || !v.duration || v.duration < 10) return
+      if (Math.abs(v.currentTime - lastSavedTime.current) < 5) return
+      const payload = getPayload()
+      if (payload) {
+        lastSavedAt.current = Date.now()
+        lastSavedTime.current = v.currentTime
+        saveProgress(payload)
+      }
+    }, 10_000)
+    return () => clearInterval(interval)
+  }, [profileId, getPayload])
+
+  // Save on visibilitychange + pagehide + beforeunload via sendBeacon
+  useEffect(() => {
+    if (!profileId) return
+    const doBeacon = () => {
+      const payload = getPayload()
+      if (payload) beaconProgress(payload)
+    }
+    const onVis = () => { if (document.visibilityState === 'hidden') doBeacon() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pagehide', doBeacon)
+    window.addEventListener('beforeunload', doBeacon)
+    return () => {
+      doBeacon() // final save on cleanup (episode switch etc)
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pagehide', doBeacon)
+      window.removeEventListener('beforeunload', doBeacon)
+    }
+  }, [profileId, getPayload])
 
   // Force landscape
   useEffect(() => {
@@ -141,7 +175,7 @@ export default function WatchPage() {
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (resumeRef.current != null && v) {
           v.currentTime = resumeRef.current
-          hasResumedRef.current = true
+  
         }
         v.play().catch(() => {})
         setLoading(false)
@@ -153,7 +187,7 @@ export default function WatchPage() {
       v.src = src
       if (resumeRef.current != null) {
         v.currentTime = resumeRef.current
-        hasResumedRef.current = true
+
       }
       v.play().catch(() => {})
       setLoading(false)
@@ -164,10 +198,9 @@ export default function WatchPage() {
   const onTimeUpdate = useCallback(() => {
     const v = videoRef.current; if (!v || seeking) return
     setCt(v.currentTime); setDur(v.duration || 0); setPlaying(!v.paused)
-    updateTime(v.currentTime, v.duration || 0)
     setShowSkip(v.currentTime >= 15 && v.currentTime < 75)
     if (type === 'tv' && hasNext && v.duration && v.currentTime > v.duration - 30) setShowNextPrompt(true); else setShowNextPrompt(false)
-  }, [seeking, type, hasNext, updateTime])
+  }, [seeking, type, hasNext])
 
   const resetTimer = () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); setShowControls(true); controlsTimer.current = setTimeout(() => setShowControls(false), 4000) }
 
