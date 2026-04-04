@@ -4,6 +4,7 @@ import { BottomNav } from "@/components/bottom-nav";
 import { Header } from "@/components/header";
 import { SessionGate } from "@/components/session-gate";
 import { SubscriptionGate } from "@/components/subscription-gate";
+import { PWAProvider } from "@/components/pwa-provider";
 import "./globals.css";
 
 const inter = Inter({
@@ -30,6 +31,9 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Streamcorn',
   },
+  icons: {
+    apple: '/icons/icon-192.png',
+  },
 };
 
 export default function RootLayout({
@@ -40,6 +44,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="font-sans antialiased bg-black text-white min-h-screen">
+        <PWAProvider />
         <Header />
         <SubscriptionGate>
           <SessionGate>
