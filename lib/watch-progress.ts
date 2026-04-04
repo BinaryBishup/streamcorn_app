@@ -95,14 +95,16 @@ export function buildPayload(
   seasonNumber?: number,
   episodeNumber?: number,
 ): SavePayload {
+  const ct = Math.floor(Number(currentTime) || 0)
+  const dur = Math.floor(Number(duration) || 0)
   return {
     profile_id: profileId,
     tmdb_id: tmdbId,
     type: mediaType,
     season_number: mediaType === 'tv' ? (seasonNumber ?? null) : null,
     episode_number: mediaType === 'tv' ? (episodeNumber ?? null) : null,
-    progress_seconds: Math.floor(currentTime),
-    duration_seconds: Math.floor(duration),
-    completed: duration > 0 && currentTime / duration > 0.93,
+    progress_seconds: ct,
+    duration_seconds: dur,
+    completed: dur > 0 && ct / dur > 0.93,
   }
 }

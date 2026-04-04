@@ -49,6 +49,7 @@ export default function WatchPage() {
   const [seekIndicator, setSeekIndicator] = useState<{ side: 'left' | 'right'; seconds: number } | null>(null)
   const [showSubs, setShowSubs] = useState(false)
   const [subsEnabled, setSubsEnabled] = useState(false)
+  const [isScrubbing, setIsScrubbing] = useState(false)
 
   // ── Watch progress ─────────────────────────────────────────────────────
   const resumeRef = useRef<number | null>(null)
@@ -78,7 +79,7 @@ export default function WatchPage() {
     return () => { cancelled = true }
   }, [tmdbId, mediaType, seasonNum, episodeNum])
 
-  // Direct save — called from timeupdate, throttled to every 10s
+  // Direct save — called from timeupdate and on pause
   const doSave = useCallback(() => {
     const v = videoRef.current
     const pid = profileIdRef.current
@@ -86,6 +87,7 @@ export default function WatchPage() {
     if (!v.duration || !isFinite(v.duration) || v.duration < 10) return
     if (v.currentTime < 5) return
     const payload = buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)
+    lastSaveTs.current = Date.now()
     saveProgress(payload)
   }, [tmdbId, mediaType, seasonNum, episodeNum])
 
@@ -173,7 +175,6 @@ export default function WatchPage() {
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         if (resumeRef.current != null && v) {
           v.currentTime = resumeRef.current
-  
         }
         v.play().catch(() => {})
         setLoading(false)
@@ -185,7 +186,6 @@ export default function WatchPage() {
       v.src = src
       if (resumeRef.current != null) {
         v.currentTime = resumeRef.current
-
       }
       v.play().catch(() => {})
       setLoading(false)
@@ -194,7 +194,7 @@ export default function WatchPage() {
   }, [src])
 
   const onTimeUpdate = useCallback(() => {
-    const v = videoRef.current; if (!v || seeking) return
+    const v = videoRef.current; if (!v || isScrubbing) return
     setCt(v.currentTime); setDur(v.duration || 0); setPlaying(!v.paused)
     setShowSkip(v.currentTime >= 15 && v.currentTime < 75)
     if (type === 'tv' && hasNext && v.duration && v.currentTime > v.duration - 30) setShowNextPrompt(true); else setShowNextPrompt(false)
@@ -204,12 +204,17 @@ export default function WatchPage() {
       lastSaveTs.current = now
       doSave()
     }
-  }, [seeking, type, hasNext, doSave])
+  }, [isScrubbing, type, hasNext, doSave])
+
+  // Save progress immediately on pause
+  const onPause = useCallback(() => {
+    setPlaying(false)
+    doSave()
+  }, [doSave])
 
   const resetTimer = () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); setShowControls(true); controlsTimer.current = setTimeout(() => setShowControls(false), 4000) }
 
   // Double tap to seek
-  // Handle taps on the VIDEO AREA ONLY (not controls)
   const handleVideoTap = (e: React.TouchEvent) => {
     if (locked) return
     if (showEps || showAudio) { setShowEps(false); setShowAudio(false); return }
@@ -244,19 +249,63 @@ export default function WatchPage() {
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); resetTimer() } else v.pause() }
   const seekBy = (d: number) => { const v = videoRef.current; if (!v) return; v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + d)); resetTimer() }
 
-  // Custom scrubber touch handlers
+  // ── Scrubber: full drag support for touch + mouse ──────────────────────
   const scrubberRef = useRef<HTMLDivElement>(null)
-  const scrubFromTouch = (e: React.TouchEvent) => {
+
+  const scrubToPosition = useCallback((clientX: number) => {
     const bar = scrubberRef.current; const v = videoRef.current
     if (!bar || !v || !dur) return
     const rect = bar.getBoundingClientRect()
-    const x = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width))
-    v.currentTime = x * dur
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    v.currentTime = ratio * dur
     setCt(v.currentTime)
+  }, [dur])
+
+  // Touch scrubber handlers
+  const onScrubTouchStart = (e: React.TouchEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsScrubbing(true)
+    if (controlsTimer.current) clearTimeout(controlsTimer.current)
+    scrubToPosition(e.touches[0].clientX)
   }
-  const onScrubStart = (e: React.TouchEvent) => { e.stopPropagation(); setSeeking(true); if (controlsTimer.current) clearTimeout(controlsTimer.current); scrubFromTouch(e) }
-  const onScrubMove = (e: React.TouchEvent) => { e.stopPropagation(); scrubFromTouch(e) }
-  const onScrubEnd = (e: React.TouchEvent) => { e.stopPropagation(); setSeeking(false); resetTimer() }
+  const onScrubTouchMove = (e: React.TouchEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    scrubToPosition(e.touches[0].clientX)
+  }
+  const onScrubTouchEnd = (e: React.TouchEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsScrubbing(false)
+    resetTimer()
+    // Save progress immediately after scrub
+    doSave()
+  }
+
+  // Mouse scrubber handlers (for desktop / hybrid devices)
+  const onScrubMouseDown = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsScrubbing(true)
+    if (controlsTimer.current) clearTimeout(controlsTimer.current)
+    scrubToPosition(e.clientX)
+
+    const onMouseMove = (ev: MouseEvent) => {
+      ev.preventDefault()
+      scrubToPosition(ev.clientX)
+    }
+    const onMouseUp = (ev: MouseEvent) => {
+      ev.preventDefault()
+      setIsScrubbing(false)
+      resetTimer()
+      doSave()
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+  }
 
   const handleNextEp = (e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -276,7 +325,7 @@ export default function WatchPage() {
 
   return (
     <div className="fixed inset-0 bg-black z-50" onTouchEnd={handleVideoTap}>
-      <video ref={videoRef} className={`w-full h-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`} playsInline onTimeUpdate={onTimeUpdate} onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onWaiting={() => setLoading(true)} onCanPlay={() => setLoading(false)} />
+      <video ref={videoRef} className={`w-full h-full ${fit === 'cover' ? 'object-cover' : 'object-contain'}`} playsInline onTimeUpdate={onTimeUpdate} onPlay={() => setPlaying(true)} onPause={onPause} onWaiting={() => setLoading(true)} onCanPlay={() => setLoading(false)} />
 
       {loading && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><div className="w-12 h-12 border-3 border-white/20 border-t-[#e50914] rounded-full animate-spin" /></div>}
 
@@ -322,41 +371,51 @@ export default function WatchPage() {
           <div className="pointer-events-auto px-6 pb-4 bg-gradient-to-t from-black/70 to-transparent" onTouchEnd={stopProp}>
             <div className="flex items-center gap-3 mb-2">
               <span className="text-white/60 text-xs tabular-nums w-12">{fmtTime(ct)}</span>
-              {/* Custom touch scrubber */}
-              <div ref={scrubberRef} className="flex-1 h-10 flex items-center touch-none cursor-pointer"
-                onTouchStart={onScrubStart} onTouchMove={onScrubMove} onTouchEnd={onScrubEnd}>
-                <div className="w-full h-1 bg-white/20 rounded-full relative">
+              {/* Scrubber with proper drag support */}
+              <div
+                ref={scrubberRef}
+                className="flex-1 relative touch-none cursor-pointer select-none"
+                style={{ padding: '14px 0' }}
+                onTouchStart={onScrubTouchStart}
+                onTouchMove={onScrubTouchMove}
+                onTouchEnd={onScrubTouchEnd}
+                onMouseDown={onScrubMouseDown}
+              >
+                <div className={`w-full rounded-full relative transition-[height] duration-150 ${isScrubbing ? 'h-[6px]' : 'h-[3px]'} bg-white/20`}>
                   <div className="h-full bg-[#e50914] rounded-full" style={{ width: `${progress}%` }} />
-                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-[#e50914] rounded-full shadow-lg shadow-black/50" style={{ left: `${progress}%` }} />
+                  <div
+                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full bg-[#e50914] shadow-lg shadow-black/50 transition-[width,height] duration-150 ${isScrubbing ? 'w-5 h-5' : 'w-3.5 h-3.5'}`}
+                    style={{ left: `${progress}%` }}
+                  />
                 </div>
               </div>
-              <span className="text-white/60 text-xs tabular-nums w-14 text-right">-{fmtTime(dur - ct)}</span>
+              <span className="text-white/60 text-xs tabular-nums w-14 text-right">-{fmtTime(Math.max(0, dur - ct))}</span>
             </div>
-            {/* Bottom row: audio/subs left, episode controls right */}
+            {/* Bottom row: inline icon + label controls */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-5">
+              <div className="flex items-center gap-4">
                 {audioTracks.length > 1 && (
-                  <button onClick={e => { e.stopPropagation(); setShowAudio(!showAudio) }} className="text-white/60 flex flex-col items-center gap-0.5 active:text-white">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-                    <span className="text-[9px]">Audio</span>
+                  <button onClick={e => { e.stopPropagation(); setShowAudio(!showAudio) }} className="text-white/60 flex items-center gap-1.5 active:text-white">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                    <span className="text-[11px]">Audio</span>
                   </button>
                 )}
-                <button onClick={e => { e.stopPropagation(); setSubsEnabled(!subsEnabled) }} className={`flex flex-col items-center gap-0.5 active:opacity-70 ${subsEnabled ? 'text-[#e50914]' : 'text-white/60'}`}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h4M14 12h4M6 16h12"/></svg>
-                  <span className="text-[9px]">Subtitles</span>
+                <button onClick={e => { e.stopPropagation(); setSubsEnabled(!subsEnabled) }} className={`flex items-center gap-1.5 active:opacity-70 ${subsEnabled ? 'text-[#e50914]' : 'text-white/60'}`}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 12h4M14 12h4M6 16h12"/></svg>
+                  <span className="text-[11px]">Subtitles</span>
                 </button>
               </div>
-              <div className="flex items-center gap-5">
+              <div className="flex items-center gap-4">
                 {type === 'tv' && hasNext && (
-                  <button onClick={handleNextEp} className="text-white/60 flex flex-col items-center gap-0.5 active:text-white">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l12 8-12 8zM18 4h2v16h-2z"/></svg>
-                    <span className="text-[9px]">Next</span>
+                  <button onClick={handleNextEp} className="text-white/60 flex items-center gap-1.5 active:text-white">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l12 8-12 8zM18 4h2v16h-2z"/></svg>
+                    <span className="text-[11px]">Next</span>
                   </button>
                 )}
                 {type === 'tv' && episodes.length > 0 && (
-                  <button onClick={e => { e.stopPropagation(); setShowEps(true) }} className="text-white/60 flex flex-col items-center gap-0.5 active:text-white">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    <span className="text-[9px]">Episodes</span>
+                  <button onClick={e => { e.stopPropagation(); setShowEps(true) }} className="text-white/60 flex items-center gap-1.5 active:text-white">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                    <span className="text-[11px]">Episodes</span>
                   </button>
                 )}
               </div>
