@@ -174,9 +174,6 @@ export default function WatchPage() {
   // Double tap to seek
   // Handle taps on the VIDEO AREA ONLY (not controls)
   const handleVideoTap = (e: React.TouchEvent) => {
-    // Only respond to taps on the video backdrop, not on controls
-    const target = e.target as HTMLElement
-    if (target.closest('[data-controls]')) return
     if (locked) return
     if (showEps || showAudio) { setShowEps(false); setShowAudio(false); return }
 
@@ -209,6 +206,20 @@ export default function WatchPage() {
   const stopProp = (e: React.TouchEvent | React.MouseEvent) => e.stopPropagation()
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); resetTimer() } else v.pause() }
   const seekBy = (d: number) => { const v = videoRef.current; if (!v) return; v.currentTime = Math.max(0, Math.min(v.duration, v.currentTime + d)); resetTimer() }
+
+  // Custom scrubber touch handlers
+  const scrubberRef = useRef<HTMLDivElement>(null)
+  const scrubFromTouch = (e: React.TouchEvent) => {
+    const bar = scrubberRef.current; const v = videoRef.current
+    if (!bar || !v || !dur) return
+    const rect = bar.getBoundingClientRect()
+    const x = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width))
+    v.currentTime = x * dur
+    setCt(v.currentTime)
+  }
+  const onScrubStart = (e: React.TouchEvent) => { e.stopPropagation(); setSeeking(true); if (controlsTimer.current) clearTimeout(controlsTimer.current); scrubFromTouch(e) }
+  const onScrubMove = (e: React.TouchEvent) => { e.stopPropagation(); scrubFromTouch(e) }
+  const onScrubEnd = (e: React.TouchEvent) => { e.stopPropagation(); setSeeking(false); resetTimer() }
 
   const handleNextEp = (e?: React.MouseEvent) => {
     e?.stopPropagation()
@@ -247,11 +258,11 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* Controls */}
+      {/* Controls — pointer-events-none on container so taps on empty space pass through to toggle */}
       {showControls && !loading && !locked && (
-        <div className="absolute inset-0 flex flex-col justify-between z-10" data-controls onTouchEnd={stopProp} onClick={stopProp}>
+        <div className="absolute inset-0 flex flex-col justify-between z-10 pointer-events-none">
           {/* Top */}
-          <div className="flex items-center gap-3 px-6 pt-4 bg-gradient-to-b from-black/70 to-transparent">
+          <div className="pointer-events-auto flex items-center gap-3 px-6 pt-4 bg-gradient-to-b from-black/70 to-transparent" onTouchEnd={stopProp}>
             <button onClick={() => router.back()} className="w-9 h-9 flex items-center justify-center active:opacity-50"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}><path d="M15 19l-7-7 7-7"/></svg></button>
             <div className="flex-1 min-w-0"><p className="text-white text-sm font-semibold truncate">{title}</p>{epTitle && <p className="text-white/50 text-xs truncate">{epTitle}</p>}</div>
             {/* PiP */}
@@ -264,23 +275,24 @@ export default function WatchPage() {
           </div>
 
           {/* Center */}
-          <div className="flex items-center justify-center gap-14">
+          <div className="pointer-events-auto flex items-center justify-center gap-14 self-center" onTouchEnd={stopProp}>
             <button onClick={() => seekBy(-10)} className="text-white active:scale-90 flex flex-col items-center"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M12.5 8.5l-4 3.5 4 3.5M4 12a8 8 0 1116 0 8 8 0 01-16 0z"/></svg><span className="text-[10px] -mt-1">10</span></button>
             <button onClick={togglePlay} className="w-18 h-18 bg-white/20 backdrop-blur rounded-full flex items-center justify-center active:scale-90 p-4">{playing ? <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg> : <svg width="32" height="32" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z"/></svg>}</button>
             <button onClick={() => seekBy(10)} className="text-white active:scale-90 flex flex-col items-center"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M11.5 8.5l4 3.5-4 3.5M20 12a8 8 0 11-16 0 8 8 0 0116 0z"/></svg><span className="text-[10px] -mt-1">10</span></button>
           </div>
 
           {/* Bottom */}
-          <div className="px-6 pb-4 bg-gradient-to-t from-black/70 to-transparent">
+          <div className="pointer-events-auto px-6 pb-4 bg-gradient-to-t from-black/70 to-transparent" onTouchEnd={stopProp}>
             <div className="flex items-center gap-3 mb-2">
               <span className="text-white/60 text-xs tabular-nums w-12">{fmtTime(ct)}</span>
-              <input type="range" min={0} max={dur || 0} value={ct}
-                onChange={e => { const v = videoRef.current; if (v) { v.currentTime = parseFloat(e.target.value); setCt(v.currentTime) } }}
-                onTouchStart={e => { e.stopPropagation(); setSeeking(true); if (controlsTimer.current) clearTimeout(controlsTimer.current) }}
-                onTouchEnd={e => { e.stopPropagation(); setSeeking(false); resetTimer() }}
-                onTouchMove={e => e.stopPropagation()}
-                className="flex-1 h-2 appearance-none bg-white/20 rounded-full touch-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#e50914] [&::-webkit-slider-thumb]:rounded-full"
-                style={{ background: `linear-gradient(to right, #e50914 ${progress}%, rgba(255,255,255,0.2) ${progress}%)` }} />
+              {/* Custom touch scrubber */}
+              <div ref={scrubberRef} className="flex-1 h-10 flex items-center touch-none cursor-pointer"
+                onTouchStart={onScrubStart} onTouchMove={onScrubMove} onTouchEnd={onScrubEnd}>
+                <div className="w-full h-1 bg-white/20 rounded-full relative">
+                  <div className="h-full bg-[#e50914] rounded-full" style={{ width: `${progress}%` }} />
+                  <div className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 bg-[#e50914] rounded-full shadow-lg shadow-black/50" style={{ left: `${progress}%` }} />
+                </div>
+              </div>
               <span className="text-white/60 text-xs tabular-nums w-14 text-right">-{fmtTime(dur - ct)}</span>
             </div>
             {/* Bottom row: audio/subs left, episode controls right */}
