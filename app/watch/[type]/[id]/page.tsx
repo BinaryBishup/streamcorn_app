@@ -2,20 +2,22 @@
 
 import { useEffect, useState } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import dynamic from 'next/dynamic'
 import { getResumePosition } from '@/lib/watch-progress'
-import type { Episode, SeasonInfo } from '@/components/player/video-player'
-
-const VideoPlayer = dynamic(() => import('@/components/player/video-player'), {
-  ssr: false,
-  loading: () => (
-    <div className="fixed inset-0 bg-black z-[9999] flex items-center justify-center">
-      <div className="w-12 h-12 border-3 border-white/20 border-t-[#e50914] rounded-full animate-spin" />
-    </div>
-  ),
-})
 
 const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
+
+export interface Episode {
+  id: number
+  episode_number: number
+  name: string
+  still_path: string | null
+  runtime?: number | null
+}
+
+export interface SeasonInfo {
+  season_number: number
+  name: string
+}
 
 export default function WatchPage() {
   const params = useParams()
@@ -29,16 +31,25 @@ export default function WatchPage() {
   const tmdbId = parseInt(id)
   const mediaType = type as 'movie' | 'tv'
 
+  const [mods, setMods] = useState<any>(null)
   const [src, setSrc] = useState<string | null>(null)
   const [title, setTitle] = useState('')
-  const [epTitle, setEpTitle] = useState('')
-  const [episodes, setEpisodes] = useState<Episode[]>([])
-  const [seasons, setSeasons] = useState<SeasonInfo[]>([])
-  const [hasNext, setHasNext] = useState(false)
-  const [resumePos, setResumePos] = useState<number | null>(null)
   const [ready, setReady] = useState(false)
 
-  // Fetch everything in parallel
+  // Load Video.js 10
+  useEffect(() => {
+    Promise.all([
+      import('@videojs/react'),
+      import('@videojs/react/video'),
+      import('@videojs/react/media/hls-video'),
+      import('@videojs/react/video/skin.css'),
+    ]).then(([react, video, hlsVideo]) => {
+      const Player = react.createPlayer({ features: react.videoFeatures })
+      setMods({ Player, VideoSkin: video.VideoSkin, HlsVideo: hlsVideo.HlsVideo })
+    })
+  }, [])
+
+  // Fetch source + metadata
   useEffect(() => {
     let cancelled = false
 
@@ -49,93 +60,53 @@ export default function WatchPage() {
         queryParams.set('episode_number', String(episode))
       }
 
-      const profileId = localStorage.getItem('streamcorn_profile_id')
-      const seasonNum = type === 'tv' ? season : undefined
-      const episodeNum = type === 'tv' ? episode : undefined
-
-      const [srcRes, detailRes, resume] = await Promise.all([
+      const [srcRes, detailRes] = await Promise.all([
         fetch(`/api/video-source?${queryParams}`).then(r => r.json()),
         fetch(`https://api.themoviedb.org/3/${type}/${id}?api_key=${TMDB_KEY}`).then(r => r.json()),
-        profileId ? getResumePosition(profileId, tmdbId, mediaType, seasonNum, episodeNum) : null,
       ])
 
       if (cancelled) return
-
       setSrc(srcRes.url || null)
       setTitle(detailRes.title || detailRes.name || '')
-      setResumePos(resume)
-
-      if (type === 'tv') {
-        const filteredSeasons = (detailRes.seasons || [])
-          .filter((s: any) => s.season_number > 0)
-          .map((s: any) => ({ season_number: s.season_number, name: s.name }))
-        setSeasons(filteredSeasons)
-
-        const seasonRes = await fetch(
-          `https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${TMDB_KEY}`
-        ).then(r => r.json())
-
-        if (cancelled) return
-
-        const eps: Episode[] = (seasonRes.episodes || []).map((e: any) => ({
-          id: e.id,
-          episode_number: e.episode_number,
-          name: e.name,
-          still_path: e.still_path,
-          runtime: e.runtime,
-        }))
-        setEpisodes(eps)
-
-        const cur = eps.find(e => e.episode_number === episode)
-        setEpTitle(cur ? `S${season}:E${episode} ${cur.name}` : '')
-        setHasNext(eps.findIndex(e => e.episode_number === episode) < eps.length - 1)
-      }
-
       setReady(true)
     }
 
-    setReady(false)
     load()
     return () => { cancelled = true }
-  }, [id, type, season, episode, tmdbId, mediaType])
+  }, [id, type, season, episode])
 
-  const handleNextEpisode = () => {
-    const idx = episodes.findIndex(ep => ep.episode_number === episode)
-    if (idx < episodes.length - 1) {
-      router.push(`/watch/tv/${id}?s=${season}&e=${episodes[idx + 1].episode_number}`)
-    }
-  }
+  // Lock landscape
+  useEffect(() => {
+    try { (screen.orientation as any)?.lock?.('landscape').catch(() => {}) } catch {}
+    return () => { try { (screen.orientation as any)?.unlock?.() } catch {} }
+  }, [])
 
-  const handleSelectEpisode = (s: number, ep: number) => {
-    router.push(`/watch/tv/${id}?s=${s}&e=${ep}`)
-  }
-
-  // Loading state
-  if (!ready || !src) {
+  if (!mods || !ready) {
     return (
-      <div className="fixed inset-0 bg-black z-50 flex items-center justify-center">
-        <div className="w-12 h-12 border-3 border-white/20 border-t-[#e50914] rounded-full animate-spin" />
+      <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+        <div style={{ width: 48, height: 48, border: '3px solid rgba(255,255,255,0.2)', borderTopColor: '#e50914', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
   }
 
+  if (!src) {
+    return (
+      <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+        <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 14 }}>No video source found</p>
+      </div>
+    )
+  }
+
+  const { Player, VideoSkin, HlsVideo } = mods
+
   return (
-    <VideoPlayer
-      src={src}
-      title={title}
-      epTitle={epTitle}
-      mediaType={mediaType}
-      tmdbId={tmdbId}
-      seasonNumber={type === 'tv' ? season : undefined}
-      episodeNumber={type === 'tv' ? episode : undefined}
-      resumePosition={resumePos}
-      episodes={episodes}
-      seasons={seasons}
-      currentSeason={season}
-      hasNext={hasNext}
-      onBack={() => router.back()}
-      onNextEpisode={handleNextEpisode}
-      onSelectEpisode={handleSelectEpisode}
-    />
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', zIndex: 9999 }}>
+      <Player.Provider>
+        <VideoSkin>
+          <HlsVideo src={src} playsInline autoPlay />
+        </VideoSkin>
+      </Player.Provider>
+    </div>
   )
 }

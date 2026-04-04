@@ -21,8 +21,47 @@ export async function GET(
     }
 
     const contentType = response.headers.get('content-type') || 'application/octet-stream'
-    const body = response.body
+    const isManifest = cdnPath.endsWith('.m3u8')
 
+    // For .m3u8 manifests: rewrite the key URI so standard players can fetch it natively
+    if (isManifest) {
+      let text = await response.text()
+
+      // Replace dummy key URI with our key endpoint
+      // Matches: URI="data:text/plain," or URI="data:text/plain;base64,"
+      text = text.replace(
+        /URI="data:text\/plain[^"]*"/g,
+        `URI="/api/hls-key"`
+      )
+
+      // Rewrite all relative URLs to go through our proxy
+      const basePath = cdnPath.substring(0, cdnPath.lastIndexOf('/') + 1)
+      const cacheBust = `_t=${Date.now()}`
+      const rewriteUrl = (url: string, addCacheBust = false) => {
+        if (url.startsWith('http') || url.startsWith('/')) return url
+        const proxied = `/api/stream/${basePath}${url}`
+        return addCacheBust && url.endsWith('.m3u8') ? `${proxied}?${cacheBust}` : proxied
+      }
+
+      // Rewrite standalone segment/playlist lines
+      text = text.replace(/^(?!#)([^\s]+\.(?:ts|m3u8|m4s|mp4|aac))$/gm, (match) => rewriteUrl(match, true))
+
+      // Rewrite URI="..." attributes in tags (e.g. #EXT-X-MEDIA URI="audio.m3u8")
+      text = text.replace(/URI="(?!\/|http|data:)([^"]+)"/g, (_, url) => `URI="${rewriteUrl(url, true)}"`)
+
+
+      return new NextResponse(text, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.apple.mpegurl',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Access-Control-Allow-Origin': '*',
+        },
+      })
+    }
+
+    // For segments: pass through as-is
+    const body = response.body
     return new NextResponse(body, {
       status: 200,
       headers: {
