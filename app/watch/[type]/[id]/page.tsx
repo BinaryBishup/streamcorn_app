@@ -50,71 +50,69 @@ export default function WatchPage() {
   const [showSubs, setShowSubs] = useState(false)
   const [subsEnabled, setSubsEnabled] = useState(false)
 
-  // ── Watch progress (direct, no hook) ────────────────────────────────────
-  const [profileId] = useState(() => typeof window !== 'undefined' ? localStorage.getItem('streamcorn_profile_id') : null)
+  // ── Watch progress ─────────────────────────────────────────────────────
+  const resumeRef = useRef<number | null>(null)
+  const lastSaveTs = useRef(0)
+
+  // Read profileId once on client mount (NOT in useState initializer which can run on server)
+  const profileIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    profileIdRef.current = localStorage.getItem('streamcorn_profile_id')
+  }, [])
+
   const tmdbId = parseInt(id)
   const mediaType = type as 'movie' | 'tv'
   const seasonNum = type === 'tv' ? season : undefined
   const episodeNum = type === 'tv' ? episode : undefined
 
-  const resumeRef = useRef<number | null>(null)
-  const lastSavedAt = useRef(0) // timestamp of last save
-  const lastSavedTime = useRef(0) // video currentTime at last save
-
-  // Helper: build payload from current video state
-  const getPayload = useCallback(() => {
-    const v = videoRef.current
-    if (!v || !profileId || !v.duration || v.duration < 10 || v.currentTime < 5) return null
-    return buildPayload(profileId, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)
-  }, [profileId, tmdbId, mediaType, seasonNum, episodeNum])
-
-  // Fetch resume position when content/episode changes
+  // Fetch resume position
   useEffect(() => {
     resumeRef.current = null
-    if (!profileId) return
+    const pid = localStorage.getItem('streamcorn_profile_id')
+    if (!pid) return
+    profileIdRef.current = pid
     let cancelled = false
-    getResumePosition(profileId, tmdbId, mediaType, seasonNum, episodeNum).then((pos) => {
+    getResumePosition(pid, tmdbId, mediaType, seasonNum, episodeNum).then((pos) => {
       if (!cancelled) resumeRef.current = pos
     })
     return () => { cancelled = true }
-  }, [profileId, tmdbId, mediaType, seasonNum, episodeNum])
+  }, [tmdbId, mediaType, seasonNum, episodeNum])
 
-  // Periodic save: every 10s if position changed enough
-  useEffect(() => {
-    if (!profileId) return
-    const interval = setInterval(() => {
-      const v = videoRef.current
-      if (!v || v.paused) return
-      if (v.currentTime < 5 || !v.duration || v.duration < 10) return
-      if (Math.abs(v.currentTime - lastSavedTime.current) < 5) return
-      const payload = getPayload()
-      if (payload) {
-        lastSavedAt.current = Date.now()
-        lastSavedTime.current = v.currentTime
-        saveProgress(payload)
-      }
-    }, 10_000)
-    return () => clearInterval(interval)
-  }, [profileId, getPayload])
+  // Direct save — called from timeupdate, throttled to every 10s
+  const doSave = useCallback(() => {
+    const v = videoRef.current
+    const pid = profileIdRef.current
+    if (!v || !pid) return
+    if (!v.duration || !isFinite(v.duration) || v.duration < 10) return
+    if (v.currentTime < 5) return
+    const payload = buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)
+    saveProgress(payload)
+  }, [tmdbId, mediaType, seasonNum, episodeNum])
 
-  // Save on visibilitychange + pagehide + beforeunload via sendBeacon
+  // Beacon save — for page leave (guaranteed delivery)
+  const doBeacon = useCallback(() => {
+    const v = videoRef.current
+    const pid = profileIdRef.current
+    if (!v || !pid) return
+    if (!v.duration || !isFinite(v.duration) || v.duration < 10) return
+    if (v.currentTime < 5) return
+    const payload = buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)
+    beaconProgress(payload)
+  }, [tmdbId, mediaType, seasonNum, episodeNum])
+
+  // Save on visibilitychange + pagehide + beforeunload
   useEffect(() => {
-    if (!profileId) return
-    const doBeacon = () => {
-      const payload = getPayload()
-      if (payload) beaconProgress(payload)
-    }
     const onVis = () => { if (document.visibilityState === 'hidden') doBeacon() }
     document.addEventListener('visibilitychange', onVis)
     window.addEventListener('pagehide', doBeacon)
     window.addEventListener('beforeunload', doBeacon)
     return () => {
-      doBeacon() // final save on cleanup (episode switch etc)
+      doBeacon() // save on effect cleanup (episode switch, unmount)
       document.removeEventListener('visibilitychange', onVis)
       window.removeEventListener('pagehide', doBeacon)
       window.removeEventListener('beforeunload', doBeacon)
     }
-  }, [profileId, getPayload])
+  }, [doBeacon])
 
   // Force landscape
   useEffect(() => {
@@ -200,7 +198,13 @@ export default function WatchPage() {
     setCt(v.currentTime); setDur(v.duration || 0); setPlaying(!v.paused)
     setShowSkip(v.currentTime >= 15 && v.currentTime < 75)
     if (type === 'tv' && hasNext && v.duration && v.currentTime > v.duration - 30) setShowNextPrompt(true); else setShowNextPrompt(false)
-  }, [seeking, type, hasNext])
+    // Save progress every 10s directly from timeupdate (most reliable on mobile)
+    const now = Date.now()
+    if (now - lastSaveTs.current >= 10_000 && v.currentTime > 5 && v.duration > 10) {
+      lastSaveTs.current = now
+      doSave()
+    }
+  }, [seeking, type, hasNext, doSave])
 
   const resetTimer = () => { if (controlsTimer.current) clearTimeout(controlsTimer.current); setShowControls(true); controlsTimer.current = setTimeout(() => setShowControls(false), 4000) }
 
