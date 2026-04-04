@@ -59,7 +59,7 @@ export default function AuthPage() {
   const handleSendOtp = async () => {
     if (phone.length !== 10) { setError('Enter 10-digit number'); return }
     setLoading(true); setError('')
-    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}` })
+    const { error } = await supabase.auth.signInWithOtp({ phone: `+91${phone}`, options: { shouldCreateUser: true } })
     if (error) { setError(error.message); setLoading(false); return }
     setScreen('otp'); setLoading(false)
   }
