@@ -31,6 +31,7 @@ export default function WatchPage() {
   const [src, setSrc] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [ready, setReady] = useState(false)
+  const [fit, setFit] = useState<'cover' | 'contain'>('cover')
 
   // ── Cleanup old service workers ────────────────────────────────────────
   useEffect(() => {
@@ -111,14 +112,12 @@ export default function WatchPage() {
     if (!v || !src) return
 
     const startPlayback = () => {
-      // Resume from saved position
       if (resumeRef.current != null && resumeRef.current > 0) {
         v.currentTime = resumeRef.current
       }
       v.play().catch(() => {})
     }
 
-    // Progress save listeners — attached here so we know `v` exists
     const onPause = () => {
       const pid = profileIdRef.current
       if (!pid || !isFinite(v.duration) || v.duration < 10 || v.currentTime < 5) return
@@ -163,25 +162,34 @@ export default function WatchPage() {
     }
   }, [src, tmdbId, mediaType, seasonNum, episodeNum])
 
-  // ── Force landscape on load ─────────────────────────────────────────────
+  // ── Force landscape + fullscreen ───────────────────────────────────────
   useEffect(() => {
-    // CSS transform trick — works immediately without user gesture
+    // CSS transform for immediate landscape (no user gesture needed)
     document.documentElement.classList.add('force-landscape')
 
-    // Also try native orientation lock (works on some Android browsers)
-    const tryOrientationLock = async () => {
+    // Try native orientation lock
+    const tryLock = async () => {
       try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
     }
-    tryOrientationLock()
+    tryLock()
+
+    // Re-lock if user rotates to portrait
+    const onOrientationChange = () => {
+      if (screen.orientation?.type?.includes('portrait')) {
+        tryLock()
+      }
+    }
+    screen.orientation?.addEventListener('change', onOrientationChange)
 
     return () => {
       document.documentElement.classList.remove('force-landscape')
+      screen.orientation?.removeEventListener('change', onOrientationChange)
       try { (screen.orientation as any)?.unlock?.() } catch {}
       try { if (document.fullscreenElement) document.exitFullscreen() } catch {}
     }
   }, [])
 
-  // Enter true fullscreen on first tap (upgrades from CSS hack to real fullscreen)
+  // Enter fullscreen on first tap (upgrades CSS hack to real fullscreen)
   const enterFullscreen = useCallback(() => {
     if (hasEnteredFullscreen.current) return
     hasEnteredFullscreen.current = true
@@ -195,7 +203,6 @@ export default function WatchPage() {
         else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen()
       } catch {}
       try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
-      // Once in real fullscreen, remove CSS hack to avoid double rotation
       document.documentElement.classList.remove('force-landscape')
     })()
 
@@ -223,8 +230,32 @@ export default function WatchPage() {
         playsInline
         autoPlay
         controls
-        style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+        style={{ width: '100%', height: '100%', objectFit: fit, background: '#000' }}
       />
+
+      {/* Fit toggle button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); setFit(f => f === 'cover' ? 'contain' : 'cover') }}
+        onTouchStart={(e) => e.stopPropagation()}
+        style={{
+          position: 'absolute',
+          top: 12,
+          right: 12,
+          zIndex: 10000,
+          background: 'rgba(0,0,0,0.6)',
+          border: 'none',
+          borderRadius: 8,
+          padding: '6px 12px',
+          color: '#fff',
+          fontSize: 11,
+          fontWeight: 600,
+          cursor: 'pointer',
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
+        }}
+      >
+        {fit === 'cover' ? '16:9' : 'Fill'}
+      </button>
     </div>
   )
 }
