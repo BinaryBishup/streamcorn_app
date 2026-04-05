@@ -225,7 +225,7 @@ export default function AccountPage() {
                   </div>
                   {!isThis && (
                     <button onClick={async () => {
-                      await fetch(`/api/sessions?device_id=${s.device_id}`, { method: 'DELETE' })
+                      await fetch(`/api/sessions?session_id=${s.id}`, { method: 'DELETE' })
                       setSessions(prev => prev.filter(x => x.id !== s.id))
                     }} className="text-[#e50914] text-xs font-medium px-3 py-1 rounded-lg active:bg-white/[0.04]">
                       Remove
