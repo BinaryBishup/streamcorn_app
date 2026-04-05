@@ -37,6 +37,9 @@ export default function WatchPage() {
   const [sheetEpisodes, setSheetEpisodes] = useState<Episode[]>([])
   const [isLandscape, setIsLandscape] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showSkipIntro, setShowSkipIntro] = useState(false)
+  const [showNextPrompt, setShowNextPrompt] = useState(false)
+  const autoNextTriggered = useRef(false)
 
   // ── SW cleanup + profile ───────────────────────────────────────────────
   useEffect(() => {
@@ -95,7 +98,24 @@ export default function WatchPage() {
     const v = videoRef.current; if (!v || !src) return
     const startPlayback = () => { if (resumeRef.current != null && resumeRef.current > 0) v.currentTime = resumeRef.current; v.play().catch(() => {}) }
     const onPause = () => { const pid = profileIdRef.current; if (pid && isFinite(v.duration) && v.duration > 10 && v.currentTime > 5) saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)) }
-    const onTimeUpdate = () => { const now = Date.now(); if (now - lastSaveTs.current >= 10_000 && v.currentTime > 5 && v.duration > 10) { lastSaveTs.current = now; const pid = profileIdRef.current; if (pid) saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)) } }
+    const onTimeUpdate = () => {
+      const now = Date.now()
+      if (now - lastSaveTs.current >= 10_000 && v.currentTime > 5 && v.duration > 10) { lastSaveTs.current = now; const pid = profileIdRef.current; if (pid) saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)) }
+      // Skip intro: show between 15s-75s
+      setShowSkipIntro(v.currentTime >= 15 && v.currentTime < 75)
+      // Auto next episode: show prompt at 30s remaining, auto-play at 10s remaining
+      if (type === 'tv' && v.duration && v.duration > 60) {
+        const remaining = v.duration - v.currentTime
+        setShowNextPrompt(remaining <= 30 && remaining > 0)
+        if (remaining <= 10 && remaining > 0 && !autoNextTriggered.current) {
+          autoNextTriggered.current = true
+          const idx = episodes.findIndex(ep => ep.episode_number === episode)
+          if (idx >= 0 && idx < episodes.length - 1) {
+            router.push(`/watch/tv/${id}?s=${season}&e=${episodes[idx + 1].episode_number}`)
+          }
+        }
+      }
+    }
     v.addEventListener('pause', onPause); v.addEventListener('seeked', onPause); v.addEventListener('timeupdate', onTimeUpdate)
     if (Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true }); hls.loadSource(src); hls.attachMedia(v)
@@ -180,6 +200,14 @@ export default function WatchPage() {
           <svg width="22" height="22" viewBox="0 -960 960 960" fill="white"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L84-369l103-78q-1-7-1-13v-20q0-6 1-13L84-571l104-186 119 50q11-8 23-15t24-12l16-128h208l16 128q13 5 24.5 12t22.5 15l119-50 104 186-103 78q1 7 1 13v20q0 6-2 13l103 78-104 186-119-50q-11 8-23 15t-24 12L578-80H370Zm104-300q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T334-520q0 58 40.5 99t99.5 41Z"/></svg>
         </button>
 
+        {/* Next Episode (TV) */}
+        {type === 'tv' && hasNext && (
+          <button onClick={handleNextEp} style={{ background: 'none', border: 'none', color: '#fff', padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+            <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
+            <span>Next</span>
+          </button>
+        )}
+
         {/* Episodes (TV) */}
         {type === 'tv' && episodes.length > 0 && (
           <button onClick={() => { videoRef.current?.pause(); setShowEpisodeSheet(true) }} style={{ background: 'none', border: 'none', color: '#fff', padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
@@ -189,18 +217,35 @@ export default function WatchPage() {
         )}
       </div>
 
-      {/* Next Episode — bottom right, just above native controls */}
-      {type === 'tv' && hasNext && showTopBar && !showSettings && (
-        <button onClick={handleNextEp} style={{
-          position: 'absolute', bottom: 48, right: 12, zIndex: 20,
-          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', border: 'none', borderRadius: 8,
-          padding: '8px 14px', color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', gap: 6,
-          opacity: showTopBar ? 1 : 0, transition: 'opacity 0.3s ease',
+      {/* Skip Intro — bottom right, shows 15s-75s */}
+      {showSkipIntro && (
+        <button onClick={() => { const v = videoRef.current; if (v) v.currentTime = 75; setShowSkipIntro(false) }} style={{
+          position: 'absolute', bottom: 80, right: 16, zIndex: 20,
+          background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 8,
+          padding: '10px 20px', color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer',
         }}>
-          <svg width="18" height="18" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
-          Next Episode
+          Skip Intro
         </button>
+      )}
+
+      {/* Auto next episode prompt — bottom right, shows at 30s remaining */}
+      {showNextPrompt && hasNext && (
+        <div style={{
+          position: 'absolute', bottom: 80, right: 16, zIndex: 20,
+          background: 'rgba(17,17,17,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: 12, padding: 14, minWidth: 180,
+        }}>
+          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: '0 0 8px' }}>Up Next</p>
+          <button onClick={handleNextEp} style={{
+            background: '#e50914', border: 'none', borderRadius: 8, padding: '8px 16px',
+            color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+          }}>
+            <svg width="16" height="16" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
+            Next Episode
+          </button>
+          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, margin: '6px 0 0', textAlign: 'center' }}>Auto-playing in a few seconds</p>
+        </div>
       )}
 
       {/* ═══ Settings Modal ═══ */}
