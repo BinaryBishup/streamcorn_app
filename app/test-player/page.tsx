@@ -74,12 +74,35 @@ export default function TestPlayer() {
       try {
         const keyRes = await fetch('/api/hls-key')
         const keyData = await keyRes.arrayBuffer()
-        log(`Key endpoint: ${keyRes.status}, ${keyData.byteLength} bytes`)
+        const keyHex = Array.from(new Uint8Array(keyData)).map(b => b.toString(16).padStart(2, '0')).join('')
+        log(`Key: ${keyRes.status}, ${keyData.byteLength}B, hex=${keyHex}`)
         if (keyData.byteLength !== 16) {
           log(`ERROR: Key should be 16 bytes, got ${keyData.byteLength}`)
         }
+        const contentType = keyRes.headers.get('content-type')
+        log(`Key content-type: ${contentType}`)
       } catch (e: any) {
         log(`ERROR fetching key: ${e.message}`)
+      }
+
+      // Manual decrypt test: fetch segment, decrypt with WebCrypto, check sync byte
+      try {
+        log('Testing manual decrypt...')
+        const segRes = await fetch('/api/stream/sample/video_0000.ts')
+        const segData = await segRes.arrayBuffer()
+        log(`Segment: ${segData.byteLength} bytes`)
+
+        const keyRes2 = await fetch('/api/hls-key')
+        const keyBuf = await keyRes2.arrayBuffer()
+        const ivHex = 'aff50f409efe62268851e890a9dfb905'
+        const ivBytes = new Uint8Array(ivHex.match(/.{2}/g)!.map(b => parseInt(b, 16)))
+
+        const cryptoKey = await crypto.subtle.importKey('raw', keyBuf, 'AES-CBC', false, ['decrypt'])
+        const decrypted = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: ivBytes }, cryptoKey, segData)
+        const firstByte = new Uint8Array(decrypted)[0]
+        log(`Decrypted: ${decrypted.byteLength}B, first byte=0x${firstByte.toString(16)} ${firstByte === 0x47 ? '(valid MPEG-TS!)' : '(INVALID!)'}`)
+      } catch (e: any) {
+        log(`Manual decrypt FAILED: ${e.message}`)
       }
 
       // Verify manifest is rewritten
