@@ -14,7 +14,6 @@ export default function AccountPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null)
   const [signingOut, setSigningOut] = useState(false)
-  const [showInstallGuide, setShowInstallGuide] = useState(false)
   const [loading, setLoading] = useState(true)
   const [sessions, setSessions] = useState<any[]>([])
   const { canInstall, isInstalled, install } = usePWA()
@@ -239,51 +238,36 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* Install app — smart detection */}
+      {/* Install instructions — only shown on browser, not in PWA */}
       {!isInstalled && (
-        <button
-          onClick={() => { if (canInstall) install(); else setShowInstallGuide(true) }}
-          className="w-full py-3.5 bg-[#e50914] rounded-2xl text-white text-sm font-bold active:bg-[#b20710] mb-3 flex items-center justify-center gap-2"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Install App
-        </button>
-      )}
-
-      {/* Install guide — platform-specific */}
-      {showInstallGuide && (
-        <div className="fixed inset-0 z-[200] bg-black/80 flex items-end justify-center" onClick={() => setShowInstallGuide(false)}>
-          <div className="bg-[#1a1a1a] rounded-t-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
-            <h3 className="text-white text-base font-bold mb-4">Install Streamcorn</h3>
-            {typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent) ? (
-              <div className="space-y-3 text-sm text-white/70">
-                <p className="text-white font-medium">Android</p>
-                <p>1. Tap the <span className="text-white">⋮ menu</span> (3 dots) in Chrome</p>
-                <p>2. Tap <span className="text-white">"Install app"</span> or <span className="text-white">"Add to Home screen"</span></p>
-                <p>3. Tap <span className="text-white">Install</span></p>
-              </div>
-            ) : typeof navigator !== 'undefined' && /iphone|ipad/i.test(navigator.userAgent) ? (
-              <div className="space-y-3 text-sm text-white/70">
-                <p className="text-white font-medium">iPhone / iPad</p>
-                <p>1. Open in <span className="text-white">Safari</span> (not Chrome)</p>
-                <p>2. Tap the <span className="text-white">Share button</span> (square with arrow)</p>
-                <p>3. Scroll down and tap <span className="text-white">"Add to Home Screen"</span></p>
-                <p>4. Tap <span className="text-white">Add</span></p>
-              </div>
-            ) : (
-              <div className="space-y-3 text-sm text-white/70">
-                <p><span className="text-white font-medium">Chrome:</span> Click the install icon in the address bar</p>
-                <p><span className="text-white font-medium">Edge:</span> Click ⋯ → Apps → Install this site</p>
-              </div>
-            )}
-            <button onClick={() => setShowInstallGuide(false)} className="w-full mt-5 py-3 bg-white/10 rounded-xl text-white text-sm font-semibold active:bg-white/15">
-              Got it
-            </button>
+        <div className="bg-[#111] rounded-2xl p-4 mb-3">
+          <div className="flex items-center gap-2 mb-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e50914" strokeWidth={2}>
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <h2 className="text-sm font-semibold text-white">Install App</h2>
           </div>
+          {canInstall ? (
+            <button onClick={install} className="w-full py-2.5 bg-[#e50914] text-white text-sm font-bold rounded-xl active:bg-[#b20710]">
+              Install Now
+            </button>
+          ) : typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent) ? (
+            <div className="space-y-2 text-sm text-white/60">
+              <p>1. Tap the <span className="text-white font-medium">⋮ menu</span> (top right)</p>
+              <p>2. Tap <span className="text-white font-medium">"Install app"</span></p>
+            </div>
+          ) : typeof navigator !== 'undefined' && /iphone|ipad/i.test(navigator.userAgent) ? (
+            <div className="space-y-2 text-sm text-white/60">
+              <p>1. Open in <span className="text-white font-medium">Safari</span></p>
+              <p>2. Tap <span className="text-white font-medium">Share</span> → <span className="text-white font-medium">"Add to Home Screen"</span></p>
+            </div>
+          ) : (
+            <div className="space-y-2 text-sm text-white/60">
+              <p>Click the <span className="text-white font-medium">install icon</span> in the address bar</p>
+            </div>
+          )}
         </div>
       )}
 
