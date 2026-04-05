@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { prefetchVideo } from '@/lib/prefetch-video'
 
 interface ProgressItem {
   tmdb_id: number; type: 'movie' | 'tv'; progress_seconds: number; duration_seconds: number
@@ -72,7 +73,9 @@ export function ContinueWatching() {
           const href = item.type === 'movie' ? `/watch/movie/${item.tmdb_id}` : `/watch/tv/${item.tmdb_id}?s=${item.season_number || 1}&e=${item.episode_number || 1}`
 
           return (
-            <Link key={`${item.type}-${item.tmdb_id}-${item.season_number}-${item.episode_number}`} href={href} className="flex-shrink-0 w-[155px]">
+            <Link key={`${item.type}-${item.tmdb_id}-${item.season_number}-${item.episode_number}`} href={href} className="flex-shrink-0 w-[155px]"
+              onTouchStart={() => prefetchVideo(item.tmdb_id, item.type as 'movie' | 'tv', item.season_number || undefined, item.episode_number || undefined)}
+            >
               <div className="relative aspect-video rounded-lg overflow-hidden bg-[#1a1a1a]">
                 {img && <img src={img} alt={item.title} className="w-full h-full object-cover" />}
                 <div className="absolute inset-0 flex items-center justify-center">
