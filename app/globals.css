@@ -70,11 +70,24 @@ html, body {
 }
 #player-root video::-webkit-media-controls-panel {
   background: transparent !important;
-  padding: 0 !important;
+  padding: 0 4px !important;
+  z-index: 30 !important;
+  position: relative !important;
 }
 #player-root video::-webkit-media-controls-timeline {
   padding: 0 8px !important;
 }
 #player-root video::-moz-fullscreen-button {
   display: none !important;
+}
+/* Ensure native controls sit above our overlay */
+#player-root video {
+  z-index: 1;
+}
+#player-root video::-webkit-media-controls-enclosure {
+  position: absolute !important;
+  bottom: 52px !important;
+  left: 8px !important;
+  right: 8px !important;
+  z-index: 30 !important;
 }

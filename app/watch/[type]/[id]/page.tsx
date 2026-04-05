@@ -239,8 +239,8 @@ export default function WatchPage() {
             </button>
           </div>
 
-          {/* Bottom: time + action row below seekbar */}
-          <div onTouchEnd={stopProp} style={{ padding: '0 16px 6px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}>
+          {/* Bottom: time + action row — positioned above native seekbar (48px from bottom) */}
+          <div onTouchEnd={stopProp} style={{ padding: '0 16px', paddingBottom: 48, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}>
             {/* Time display */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
               <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(ct)}</span>
