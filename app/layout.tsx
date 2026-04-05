@@ -44,16 +44,17 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`}>
       <body className="font-sans antialiased bg-black text-white min-h-screen">
-        <PWAProvider />
-        <Header />
-        <SubscriptionGate>
-          <SessionGate>
-            <main className="pb-[72px]">
-              {children}
-            </main>
-          </SessionGate>
-        </SubscriptionGate>
-        <BottomNav />
+        <PWAProvider>
+          <Header />
+          <SubscriptionGate>
+            <SessionGate>
+              <main className="pb-[72px]">
+                {children}
+              </main>
+            </SessionGate>
+          </SubscriptionGate>
+          <BottomNav />
+        </PWAProvider>
       </body>
     </html>
   );

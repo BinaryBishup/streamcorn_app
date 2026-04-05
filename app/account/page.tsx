@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { signOut } from '@/lib/sign-out'
+import { usePWA } from '@/components/pwa-provider'
 
 interface Profile { id: string; name: string; avatar_url: string | null }
 
@@ -13,6 +14,7 @@ export default function AccountPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null)
   const [signingOut, setSigningOut] = useState(false)
+  const { canInstall, isInstalled, install } = usePWA()
 
   useEffect(() => {
     fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d.user)).catch(() => {})
@@ -153,6 +155,31 @@ export default function AccountPage() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={1.5} opacity={0.2}><path d="M9 5l7 7-7 7"/></svg>
         </Link>
       </div>
+
+      {/* Install app */}
+      {canInstall && !isInstalled && (
+        <button
+          onClick={install}
+          className="w-full py-3.5 bg-[#e50914] rounded-2xl text-white text-sm font-bold active:bg-[#b20710] mb-3 flex items-center justify-center gap-2"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Install App
+        </button>
+      )}
+      {isInstalled && (
+        <div className="w-full py-3 bg-[#111] rounded-2xl text-center mb-3">
+          <span className="text-green-400 text-sm font-medium flex items-center justify-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            App Installed
+          </span>
+        </div>
+      )}
 
       {/* Sign out */}
       <button
