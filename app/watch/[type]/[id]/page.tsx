@@ -174,6 +174,16 @@ export default function WatchPage() {
   const handleNextEp = () => { const idx = episodes.findIndex(ep => ep.episode_number === episode); if (idx < episodes.length - 1) router.push(`/watch/tv/${id}?s=${season}&e=${episodes[idx + 1].episode_number}`) }
   const setAudioTrack = (trackId: number) => { if (hlsRef.current) hlsRef.current.audioTrack = trackId; setShowAudioSheet(false) }
 
+  // Seekbar — uses a div with onTouchMove for smooth dragging
+  const seekBarRef = useRef<HTMLDivElement>(null)
+  const seekTo = (clientX: number) => {
+    const bar = seekBarRef.current; const v = videoRef.current
+    if (!bar || !v || !v.duration) return
+    const rect = bar.getBoundingClientRect()
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+    v.currentTime = ratio * v.duration
+    setCt(v.currentTime)
+  }
 
   const progress = dur > 0 ? (ct / dur) * 100 : 0
   const stopProp = (e: React.TouchEvent | React.MouseEvent) => e.stopPropagation()
@@ -191,7 +201,7 @@ export default function WatchPage() {
 
   return (
     <div id="player-root" style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999 }} onTouchEnd={handleVideoAreaTap}>
-      <video ref={videoRef} playsInline autoPlay controls style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: '#000' }} />
+      <video ref={videoRef} playsInline autoPlay style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: '#000' }} />
 
       {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }}><div style={{ width: 48, height: 48, border: '3px solid rgba(255,255,255,0.2)', borderTopColor: '#e50914', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /></div>}
 
@@ -239,12 +249,33 @@ export default function WatchPage() {
             </button>
           </div>
 
-          {/* Bottom: time + action row — positioned above native seekbar (48px from bottom) */}
-          <div onTouchEnd={stopProp} style={{ padding: '0 16px', paddingBottom: 48, background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}>
+          {/* Bottom: seekbar + time + action row */}
+          <div onTouchEnd={stopProp} style={{ padding: '0 16px 10px', background: 'linear-gradient(to top, rgba(0,0,0,0.8) 60%, transparent)' }}>
+            {/* Seekbar */}
+            <div
+              ref={seekBarRef}
+              style={{ position: 'relative', padding: '16px 0', touchAction: 'none', cursor: 'pointer' }}
+              onTouchStart={(e) => { e.stopPropagation(); e.preventDefault(); setIsScrubbing(true); seekTo(e.touches[0].clientX) }}
+              onTouchMove={(e) => { e.stopPropagation(); e.preventDefault(); seekTo(e.touches[0].clientX) }}
+              onTouchEnd={(e) => { e.stopPropagation(); e.preventDefault(); setIsScrubbing(false); resetTimer() }}
+              onMouseDown={(e) => {
+                e.stopPropagation(); e.preventDefault(); setIsScrubbing(true); seekTo(e.clientX)
+                const move = (ev: MouseEvent) => { ev.preventDefault(); seekTo(ev.clientX) }
+                const up = () => { setIsScrubbing(false); resetTimer(); document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up) }
+                document.addEventListener('mousemove', move); document.addEventListener('mouseup', up)
+              }}
+            >
+              <div style={{ width: '100%', height: isScrubbing ? 6 : 3, background: 'rgba(255,255,255,0.25)', borderRadius: 9999, position: 'relative', transition: 'height 0.15s' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${buffered}%`, background: 'rgba(255,255,255,0.15)', borderRadius: 9999 }} />
+                <div style={{ height: '100%', width: `${progress}%`, background: '#e50914', borderRadius: 9999, position: 'relative' }} />
+                <div style={{ position: 'absolute', top: '50%', left: `${progress}%`, transform: 'translate(-50%, -50%)', width: isScrubbing ? 16 : 10, height: isScrubbing ? 16 : 10, background: '#e50914', borderRadius: '50%', boxShadow: '0 0 6px rgba(0,0,0,0.6)', transition: 'width 0.15s, height 0.15s' }} />
+              </div>
+            </div>
+
             {/* Time display */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
-              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(ct)}</span>
-              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>-{fmtTime(Math.max(0, dur - ct))}</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(ct)}</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>-{fmtTime(Math.max(0, dur - ct))}</span>
             </div>
 
             {/* Action row — inline icon + label, evenly spaced */}

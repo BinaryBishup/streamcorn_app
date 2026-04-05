@@ -57,37 +57,3 @@ html, body {
   animation: slideDown 0.3s ease-out;
 }
 
-/* Player: show only the native seekbar/timeline, hide all other native controls */
-#player-root video::-webkit-media-controls-play-button,
-#player-root video::-webkit-media-controls-mute-button,
-#player-root video::-webkit-media-controls-volume-slider,
-#player-root video::-webkit-media-controls-fullscreen-button,
-#player-root video::-webkit-media-controls-current-time-display,
-#player-root video::-webkit-media-controls-time-remaining-display,
-#player-root video::-webkit-media-controls-toggle-closed-captions-button,
-#player-root video::-webkit-media-controls-overflow-button {
-  display: none !important;
-}
-#player-root video::-webkit-media-controls-panel {
-  background: transparent !important;
-  padding: 0 4px !important;
-  z-index: 30 !important;
-  position: relative !important;
-}
-#player-root video::-webkit-media-controls-timeline {
-  padding: 0 8px !important;
-}
-#player-root video::-moz-fullscreen-button {
-  display: none !important;
-}
-/* Ensure native controls sit above our overlay */
-#player-root video {
-  z-index: 1;
-}
-#player-root video::-webkit-media-controls-enclosure {
-  position: absolute !important;
-  bottom: 52px !important;
-  left: 8px !important;
-  right: 8px !important;
-  z-index: 30 !important;
-}
