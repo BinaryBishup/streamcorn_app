@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { prefetchVideo } from '@/lib/prefetch-video'
+import { saveProgress, buildPayload } from '@/lib/watch-progress'
 
 interface ProgressItem {
   tmdb_id: number; type: 'movie' | 'tv'; progress_seconds: number; duration_seconds: number
@@ -72,10 +73,24 @@ export function ContinueWatching() {
           const img = item.backdrop_path ? `https://image.tmdb.org/t/p/w400${item.backdrop_path}` : null
           const href = item.type === 'movie' ? `/watch/movie/${item.tmdb_id}` : `/watch/tv/${item.tmdb_id}?s=${item.season_number || 1}&e=${item.episode_number || 1}`
 
+          const removeItem = (e: React.MouseEvent) => {
+            e.preventDefault(); e.stopPropagation()
+            const pid = localStorage.getItem('streamcorn_profile_id')
+            if (!pid) return
+            // Mark as completed to remove from continue watching
+            saveProgress(buildPayload(pid, item.tmdb_id, item.type as 'movie' | 'tv', item.duration_seconds, item.duration_seconds, item.season_number || undefined, item.episode_number || undefined))
+            setItems(prev => prev.filter(i => !(i.tmdb_id === item.tmdb_id && i.type === item.type && i.season_number === item.season_number && i.episode_number === item.episode_number)))
+          }
+
           return (
-            <Link key={`${item.type}-${item.tmdb_id}-${item.season_number}-${item.episode_number}`} href={href} className="flex-shrink-0 w-[155px]"
-              onTouchStart={() => prefetchVideo(item.tmdb_id, item.type as 'movie' | 'tv', item.season_number || undefined, item.episode_number || undefined)}
-            >
+            <div key={`${item.type}-${item.tmdb_id}-${item.season_number}-${item.episode_number}`} className="flex-shrink-0 w-[155px] relative">
+              {/* Remove button */}
+              <button onClick={removeItem} className="absolute -top-1 -right-1 z-10 w-5 h-5 bg-black/80 rounded-full flex items-center justify-center border border-white/10">
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2.5}><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+              <Link href={href}
+                onTouchStart={() => prefetchVideo(item.tmdb_id, item.type as 'movie' | 'tv', item.season_number || undefined, item.episode_number || undefined)}
+              >
               <div className="relative aspect-video rounded-lg overflow-hidden bg-[#1a1a1a]">
                 {img && <img src={img} alt={item.title} className="w-full h-full object-cover" />}
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -95,6 +110,7 @@ export function ContinueWatching() {
               <p className="text-white/70 text-xs mt-1.5 truncate">{item.title}</p>
               <p className="text-white/30 text-[10px]">{mins}m remaining</p>
             </Link>
+            </div>
           )
         })}
       </div>

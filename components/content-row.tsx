@@ -24,7 +24,7 @@ export function ContentRow({ title, items }: { title: string; items: ContentItem
             href={`/detail/${item.type}/${item.tmdb_id}`}
             className="flex-shrink-0 w-[110px]"
           >
-            <div className="aspect-[2/3] rounded-lg overflow-hidden bg-[#1a1a1a]">
+            <div className="aspect-[2/3] rounded-lg overflow-hidden bg-[#1a1a1a] relative">
               {item.poster_path ? (
                 <img
                   src={`https://image.tmdb.org/t/p/w342${item.poster_path}`}
@@ -36,6 +36,9 @@ export function ContentRow({ title, items }: { title: string; items: ContentItem
                 <div className="w-full h-full flex items-center justify-center text-white/20 text-[10px] text-center p-2">
                   {item.title}
                 </div>
+              )}
+              {item.year && item.year >= new Date().getFullYear() && (
+                <span className="absolute top-1.5 left-1.5 bg-[#e50914] text-white text-[8px] font-bold px-1.5 py-0.5 rounded">NEW</span>
               )}
             </div>
           </Link>

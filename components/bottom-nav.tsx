@@ -22,6 +22,18 @@ export function BottomNav() {
       .catch(() => {})
   }, [])
 
+  const [hasNotification, setHasNotification] = useState(false)
+
+  // Check for fulfilled requests
+  useEffect(() => {
+    fetch('/api/content-requests')
+      .then(r => r.json())
+      .then(d => {
+        const reqs = d.requests || []
+        setHasNotification(reqs.some((r: any) => r.status === 'added' || r.status === 'approved'))
+      }).catch(() => {})
+  }, [])
+
   if (pathname.startsWith('/watch') || pathname.startsWith('/auth') || pathname === '/profiles' || pathname.startsWith('/subscribe') || pathname.startsWith('/sports')) return null
 
   const isAvatarImage = activeProfile?.avatar_url?.startsWith('/avatars/')
@@ -42,10 +54,13 @@ export function BottomNav() {
 
           if (tab.type === 'request') {
             return (
-              <Link key={tab.href} href={tab.href} className="flex flex-col items-center justify-center gap-0.5 flex-1 py-2">
-                <svg width="20" height="20" viewBox="0 -960 960 960" fill={active ? 'white' : 'rgba(255,255,255,0.4)'}>
-                  <path d="M440-280h80v-160h160v-80H520v-160h-80v160H280v80h160v160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z"/>
-                </svg>
+              <Link key={tab.href} href={tab.href} className="flex flex-col items-center justify-center gap-0.5 flex-1 py-2 relative">
+                <div className="relative">
+                  <svg width="20" height="20" viewBox="0 -960 960 960" fill={active ? 'white' : 'rgba(255,255,255,0.4)'}>
+                    <path d="M440-280h80v-160h160v-80H520v-160h-80v160H280v80h160v160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z"/>
+                  </svg>
+                  {hasNotification && !active && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-[#e50914] rounded-full" />}
+                </div>
                 <span className={`text-[9px] font-medium ${active ? 'text-white' : 'text-white/40'}`}>{tab.label}</span>
               </Link>
             )

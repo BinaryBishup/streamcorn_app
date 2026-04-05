@@ -42,8 +42,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} dark`}>
-      <body className="font-sans antialiased bg-black text-white min-h-screen">
+    <html lang="en" className={`${inter.variable} dark`} style={{ backgroundColor: '#000' }}>
+      <body className="font-sans antialiased bg-black text-white min-h-screen" style={{ backgroundColor: '#000' }}>
         <PWAProvider>
           <Header />
           <SubscriptionGate>
