@@ -16,6 +16,7 @@ export default function AccountPage() {
   const [signingOut, setSigningOut] = useState(false)
   const [showInstallGuide, setShowInstallGuide] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [sessions, setSessions] = useState<any[]>([])
   const { canInstall, isInstalled, install } = usePWA()
 
   useEffect(() => {
@@ -28,6 +29,7 @@ export default function AccountPage() {
         const savedId = localStorage.getItem('streamcorn_profile_id')
         setActiveProfile(profs.find((p: Profile) => p.id === savedId) || profs[0] || null)
       }).catch(() => {}),
+      fetch('/api/sessions').then(r => r.json()).then(d => setSessions(d.sessions || [])).catch(() => {}),
     ]).finally(() => setLoading(false))
   }, [])
 
@@ -204,25 +206,43 @@ export default function AccountPage() {
         </Link>
       </div>
 
-      {/* Install app — always show */}
-      {isInstalled ? (
-        <div className="w-full py-3 bg-[#111] rounded-2xl text-center mb-3">
-          <span className="text-green-400 text-sm font-medium flex items-center justify-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-            App Installed
-          </span>
+      {/* Active sessions */}
+      {sessions.length > 0 && (
+        <div className="bg-[#111] rounded-2xl p-4 mb-3">
+          <h2 className="text-sm font-semibold text-white mb-3">Active Sessions</h2>
+          <div className="space-y-2">
+            {sessions.map((s: any) => {
+              const isThis = s.device_id === localStorage.getItem('streamcorn_device_id')
+              return (
+                <div key={s.id} className="flex items-center justify-between py-2">
+                  <div className="flex items-center gap-3">
+                    <svg width="18" height="18" viewBox="0 -960 960 960" fill={isThis ? 'white' : 'rgba(255,255,255,0.3)'}>
+                      {s.device_type === 'mobile' ? <path d="M280-40q-33 0-56.5-23.5T200-120v-720q0-33 23.5-56.5T280-920h400q33 0 56.5 23.5T760-840v720q0 33-23.5 56.5T680-40H280Zm0-120v40h400v-40H280Zm200 80q17 0 28.5-11.5T520-120q0-17-11.5-28.5T480-160q-17 0-28.5 11.5T440-120q0 17 11.5 28.5T480-80Z"/> : <path d="M320-120v-80h80v-80H160q-33 0-56.5-23.5T80-360v-400q0-33 23.5-56.5T160-840h640q33 0 56.5 23.5T880-760v400q0 33-23.5 56.5T800-280H560v80h80v80H320Z"/>}
+                    </svg>
+                    <div>
+                      <p className={`text-sm ${isThis ? 'text-white font-medium' : 'text-white/60'}`}>{s.device_name || 'Unknown Device'}</p>
+                      <p className="text-white/30 text-[10px]">{s.device_type}{isThis ? ' · This device' : ''}</p>
+                    </div>
+                  </div>
+                  {!isThis && (
+                    <button onClick={async () => {
+                      await fetch(`/api/sessions?device_id=${s.device_id}`, { method: 'DELETE' })
+                      setSessions(prev => prev.filter(x => x.id !== s.id))
+                    }} className="text-[#e50914] text-xs font-medium px-3 py-1 rounded-lg active:bg-white/[0.04]">
+                      Remove
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </div>
-      ) : (
+      )}
+
+      {/* Install app — smart detection */}
+      {!isInstalled && (
         <button
-          onClick={() => {
-            if (canInstall) {
-              install()
-            } else {
-              setShowInstallGuide(true)
-            }
-          }}
+          onClick={() => { if (canInstall) install(); else setShowInstallGuide(true) }}
           className="w-full py-3.5 bg-[#e50914] rounded-2xl text-white text-sm font-bold active:bg-[#b20710] mb-3 flex items-center justify-center gap-2"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -234,16 +254,32 @@ export default function AccountPage() {
         </button>
       )}
 
-      {/* Install guide for browsers without beforeinstallprompt (iOS Safari etc) */}
+      {/* Install guide — platform-specific */}
       {showInstallGuide && (
         <div className="fixed inset-0 z-[200] bg-black/80 flex items-end justify-center" onClick={() => setShowInstallGuide(false)}>
           <div className="bg-[#1a1a1a] rounded-t-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
             <h3 className="text-white text-base font-bold mb-4">Install Streamcorn</h3>
-            <div className="space-y-3 text-sm text-white/70">
-              <p><span className="text-white font-medium">Chrome (Android):</span> Tap the menu (3 dots) → "Add to Home screen"</p>
-              <p><span className="text-white font-medium">Safari (iOS):</span> Tap the share button → "Add to Home Screen"</p>
-              <p><span className="text-white font-medium">Samsung Internet:</span> Tap the menu → "Add page to" → "Home screen"</p>
-            </div>
+            {typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent) ? (
+              <div className="space-y-3 text-sm text-white/70">
+                <p className="text-white font-medium">Android</p>
+                <p>1. Tap the <span className="text-white">⋮ menu</span> (3 dots) in Chrome</p>
+                <p>2. Tap <span className="text-white">"Install app"</span> or <span className="text-white">"Add to Home screen"</span></p>
+                <p>3. Tap <span className="text-white">Install</span></p>
+              </div>
+            ) : typeof navigator !== 'undefined' && /iphone|ipad/i.test(navigator.userAgent) ? (
+              <div className="space-y-3 text-sm text-white/70">
+                <p className="text-white font-medium">iPhone / iPad</p>
+                <p>1. Open in <span className="text-white">Safari</span> (not Chrome)</p>
+                <p>2. Tap the <span className="text-white">Share button</span> (square with arrow)</p>
+                <p>3. Scroll down and tap <span className="text-white">"Add to Home Screen"</span></p>
+                <p>4. Tap <span className="text-white">Add</span></p>
+              </div>
+            ) : (
+              <div className="space-y-3 text-sm text-white/70">
+                <p><span className="text-white font-medium">Chrome:</span> Click the install icon in the address bar</p>
+                <p><span className="text-white font-medium">Edge:</span> Click ⋯ → Apps → Install this site</p>
+              </div>
+            )}
             <button onClick={() => setShowInstallGuide(false)} className="w-full mt-5 py-3 bg-white/10 rounded-xl text-white text-sm font-semibold active:bg-white/15">
               Got it
             </button>

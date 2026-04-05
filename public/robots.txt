@@ -1,0 +1,13 @@
+User-agent: *
+Disallow: /watch/
+Disallow: /api/
+Disallow: /sports/
+Disallow: /profiles
+Disallow: /subscribe
+Disallow: /account
+Allow: /
+
+User-agent: Googlebot
+Disallow: /watch/
+Disallow: /api/
+Disallow: /sports/

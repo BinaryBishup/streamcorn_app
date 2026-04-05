@@ -5,6 +5,7 @@ import { Header } from "@/components/header";
 import { SessionGate } from "@/components/session-gate";
 import { SubscriptionGate } from "@/components/subscription-gate";
 import { PWAProvider } from "@/components/pwa-provider";
+import { SecurityGuard } from "@/components/security-guard";
 import "./globals.css";
 
 const inter = Inter({
@@ -44,6 +45,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`} style={{ backgroundColor: '#000' }}>
       <body className="font-sans antialiased bg-black text-white min-h-screen" style={{ backgroundColor: '#000' }}>
+        <SecurityGuard />
         <PWAProvider>
           <Header />
           <SubscriptionGate>
