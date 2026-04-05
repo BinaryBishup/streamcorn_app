@@ -186,7 +186,7 @@ export default function WatchPage() {
 
   const progress = dur > 0 ? (ct / dur) * 100 : 0
   const stopProp = (e: React.TouchEvent | React.MouseEvent) => e.stopPropagation()
-  const btnStyle: React.CSSProperties = { background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, padding: 0 }
+  const btnStyle: React.CSSProperties = { background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, padding: '4px 0', minWidth: 44 }
 
   if (!ready || !src) return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
@@ -215,8 +215,6 @@ export default function WatchPage() {
               <p style={{ color: '#fff', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{title}</p>
               {epTitle && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: 0 }}>{epTitle}</p>}
             </div>
-            <button onClick={() => setFit(f => f === 'cover' ? 'contain' : 'cover')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 8, padding: '5px 10px', color: '#fff', fontSize: 11, fontWeight: 600 }}>{fit === 'cover' ? '16:9' : 'Fill'}</button>
-            <button onClick={() => { setLocked(true); setShowControls(false) }} style={{ background: 'none', border: 'none', color: '#fff', padding: 0 }}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={1.5}><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0110 0v4" /></svg></button>
           </div>
 
           {/* Center */}
@@ -250,34 +248,59 @@ export default function WatchPage() {
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'right' }}>-{fmtTime(Math.max(0, dur - ct))}</span>
             </div>
 
-            {/* Action row */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                {audioTracks.length > 1 && (
-                  <button onClick={() => { setShowAudioSheet(!showAudioSheet); setShowEpisodeSheet(false) }} style={btnStyle}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M9 18V5l12-2v13M9 18a3 3 0 11-6 0 3 3 0 016 0zm12-2a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                    <span>Audio</span>
-                  </button>
-                )}
-                <button onClick={() => setSubsEnabled(!subsEnabled)} style={{ ...btnStyle, color: subsEnabled ? '#e50914' : 'rgba(255,255,255,0.7)' }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M6 12h4M14 12h4M6 16h12" /></svg>
-                  <span>Subtitles</span>
+            {/* Action row — equidistant, white icons, Google Material style */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
+              {/* Audio */}
+              {audioTracks.length > 1 && (
+                <button onClick={() => { setShowAudioSheet(!showAudioSheet); setShowEpisodeSheet(false) }} style={btnStyle}>
+                  {/* Material: volume_up */}
+                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z"/></svg>
+                  <span>Audio</span>
                 </button>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                {type === 'tv' && hasNext && (
-                  <button onClick={handleNextEp} style={btnStyle}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 4l12 8-12 8zM18 4h2v16h-2z" /></svg>
-                    <span>Next</span>
-                  </button>
+              )}
+
+              {/* Subtitles */}
+              <button onClick={() => setSubsEnabled(!subsEnabled)} style={{ ...btnStyle, color: subsEnabled ? '#e50914' : '#fff' }}>
+                {/* Material: closed_caption */}
+                <svg width="20" height="20" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-160q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h560q33 0 56.5 23.5T840-720v480q0 33-23.5 56.5T760-160H200Zm80-200h120q17 0 28.5-11.5T440-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T400-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm280 0h120q17 0 28.5-11.5T720-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T680-600H560q-17 0-28.5 11.5T520-560v160q0 17 11.5 28.5T560-360Z"/></svg>
+                <span>Subtitles</span>
+              </button>
+
+              {/* Fit toggle */}
+              <button onClick={() => setFit(f => f === 'cover' ? 'contain' : 'cover')} style={btnStyle}>
+                {/* Material: fit_screen / aspect_ratio */}
+                {fit === 'cover' ? (
+                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M200-280q-33 0-56.5-23.5T120-360v-240q0-33 23.5-56.5T200-680h560q33 0 56.5 23.5T840-600v240q0 33-23.5 56.5T760-280H200Zm0-80h560v-240H200v240Z"/></svg>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M120-120v-200h80v120h120v80H120Zm520 0v-80h120v-120h80v200H640ZM120-640v-200h200v80H200v120h-80Zm640 0v-120H640v-80h200v200h-80Z"/></svg>
                 )}
-                {type === 'tv' && episodes.length > 0 && (
-                  <button onClick={() => { setShowEpisodeSheet(!showEpisodeSheet); setShowAudioSheet(false) }} style={btnStyle}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-                    <span>Episodes</span>
-                  </button>
-                )}
-              </div>
+                <span>{fit === 'cover' ? '16:9' : 'Fill'}</span>
+              </button>
+
+              {/* Next Episode (TV only) */}
+              {type === 'tv' && hasNext && (
+                <button onClick={handleNextEp} style={btnStyle}>
+                  {/* Material: skip_next */}
+                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
+                  <span>Next</span>
+                </button>
+              )}
+
+              {/* Episodes (TV only) */}
+              {type === 'tv' && episodes.length > 0 && (
+                <button onClick={() => { setShowEpisodeSheet(!showEpisodeSheet); setShowAudioSheet(false) }} style={btnStyle}>
+                  {/* Material: video_library */}
+                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M320-400h480L650-580l-130 170-96-122-104 132ZM240-240q-33 0-56.5-23.5T160-320v-480q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H240ZM80-80v-560h80v480h560v80H80Z"/></svg>
+                  <span>Episodes</span>
+                </button>
+              )}
+
+              {/* Lock */}
+              <button onClick={() => { setLocked(true); setShowControls(false) }} style={btnStyle}>
+                {/* Material: lock */}
+                <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm240-200q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Z"/></svg>
+                <span>Lock</span>
+              </button>
             </div>
           </div>
         </div>

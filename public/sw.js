@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamcorn-v3'
+const CACHE_NAME = 'streamcorn-v4'
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -68,13 +68,32 @@ self.addEventListener('fetch', (event) => {
 
   if (request.method !== 'GET') return
 
-  // Never intercept: Next.js chunks, API calls, stream/HLS requests
+  // Never intercept: API calls, stream/HLS requests
   if (
-    request.url.includes('/_next/') ||
     request.url.includes('/api/') ||
     request.url.includes('.m3u8') ||
     request.url.includes('.ts')
   ) return
+
+  // Cache Next.js static chunks (JS/CSS) — they have content hashes so cache-first is safe
+  if (request.url.includes('/_next/static/')) {
+    event.respondWith(
+      caches.match(request).then((cached) => {
+        if (cached) return cached
+        return fetch(request).then((response) => {
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
+          return response
+        })
+      })
+    )
+    return
+  }
+
+  // Skip other _next requests (HMR, dev stuff)
+  if (request.url.includes('/_next/')) return
 
   // Cache-first for static assets, network-first for pages
   if (request.mode === 'navigate') {
