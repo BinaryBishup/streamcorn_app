@@ -40,6 +40,7 @@ export default function WatchPage() {
   const [showSkipIntro, setShowSkipIntro] = useState(false)
   const [showNextPrompt, setShowNextPrompt] = useState(false)
   const autoNextTriggered = useRef(false)
+  const metadataRef = useRef<{ skip_intro_start: number | null; skip_intro_end: number | null; skip_recap_end: number | null; credits_start: number | null; next_episode_prompt: number | null; completion_threshold: number | null } | null>(null)
 
   // ── SW cleanup + profile ───────────────────────────────────────────────
   useEffect(() => {
@@ -61,7 +62,7 @@ export default function WatchPage() {
         pid ? getResumePosition(pid, tmdbId, mediaType, seasonNum, episodeNum) : null,
       ])
       if (cancelled) return
-      setSrc(srcRes.url || null); setTitle(detailRes.title || detailRes.name || ''); resumeRef.current = resume; setReady(true)
+      setSrc(srcRes.url || null); setTitle(detailRes.title || detailRes.name || ''); resumeRef.current = resume; metadataRef.current = srcRes.metadata || null; setReady(true)
       if (type === 'tv') {
         setEpTitle(`S${season}:E${episode}`)
         setSeasons((detailRes.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => ({ season_number: s.season_number, name: s.name }))); setSheetSeason(season)
@@ -101,13 +102,20 @@ export default function WatchPage() {
     const onTimeUpdate = () => {
       const now = Date.now()
       if (now - lastSaveTs.current >= 10_000 && v.currentTime > 5 && v.duration > 10) { lastSaveTs.current = now; const pid = profileIdRef.current; if (pid) saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)) }
-      // Skip intro: show between 15s-75s
-      setShowSkipIntro(v.currentTime >= 15 && v.currentTime < 75)
-      // Auto next episode: show prompt at 30s remaining, auto-play at 10s remaining
+      // Content metadata with fallbacks
+      const meta = metadataRef.current
+      const introStart = meta?.skip_intro_start ?? 15
+      const introEnd = meta?.skip_intro_end ?? 75
+      const creditsStart = meta?.credits_start ?? (v.duration ? v.duration - 30 : Infinity)
+      const nextPromptAt = meta?.next_episode_prompt ?? (v.duration ? v.duration - 30 : Infinity)
+
+      // Skip intro
+      setShowSkipIntro(v.currentTime >= introStart && v.currentTime < introEnd)
+
+      // Auto next episode
       if (type === 'tv' && v.duration && v.duration > 60) {
-        const remaining = v.duration - v.currentTime
-        setShowNextPrompt(remaining <= 30 && remaining > 0)
-        if (remaining <= 10 && remaining > 0 && !autoNextTriggered.current) {
+        setShowNextPrompt(v.currentTime >= nextPromptAt && v.currentTime < v.duration)
+        if (v.currentTime >= creditsStart + 10 && !autoNextTriggered.current) {
           autoNextTriggered.current = true
           const idx = episodes.findIndex(ep => ep.episode_number === episode)
           if (idx >= 0 && idx < episodes.length - 1) {
@@ -219,7 +227,7 @@ export default function WatchPage() {
 
       {/* Skip Intro — bottom right, shows 15s-75s */}
       {showSkipIntro && (
-        <button onClick={() => { const v = videoRef.current; if (v) v.currentTime = 75; setShowSkipIntro(false) }} style={{
+        <button onClick={() => { const v = videoRef.current; if (v) v.currentTime = metadataRef.current?.skip_intro_end ?? 75; setShowSkipIntro(false) }} style={{
           position: 'absolute', bottom: 80, right: 16, zIndex: 20,
           background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 8,
           padding: '10px 20px', color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer',

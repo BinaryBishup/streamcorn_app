@@ -19,15 +19,10 @@ export async function GET(request: NextRequest) {
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll()
-        },
-      },
-    }
+    { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
+  // Fetch video source
   let query = supabase
     .from('video_sources')
     .select('url, quality, audio_tracks, subtitle_tracks')
@@ -45,15 +40,28 @@ export async function GET(request: NextRequest) {
   }
 
   const source = data?.[0]
-  // Use the stream proxy to avoid CORS issues with CDN
   let url = source?.url || null
   if (url && !url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
     url = `/api/stream/${url}`
   }
 
+  // Fetch content metadata (skip intro, credits, etc.)
+  let metaQuery = supabase
+    .from('content_metadata')
+    .select('skip_intro_start, skip_intro_end, skip_recap_end, credits_start, next_episode_prompt, completion_threshold')
+    .eq('tmdb_id', parseInt(tmdbId))
+    .eq('type', type)
+
+  if (type === 'tv' && seasonNumber && episodeNumber) {
+    metaQuery = metaQuery.eq('season_number', parseInt(seasonNumber)).eq('episode_number', parseInt(episodeNumber))
+  }
+
+  const { data: metaData } = await metaQuery.maybeSingle()
+
   return NextResponse.json({
     url,
     subtitleTracks: source?.subtitle_tracks || [],
     audioTracks: source?.audio_tracks || [],
+    metadata: metaData || null,
   })
 }
