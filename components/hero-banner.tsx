@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { prefetchVideo } from '@/lib/prefetch-video'
 
 const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
@@ -64,16 +65,43 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
   const genreList = genres[key] || []
 
   const handleSwipeStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX }
+  const swiped = useRef(false)
+  const router = useRouter()
+
   const handleSwipeEnd = (e: React.TouchEvent) => {
     const diff = touchStartX.current - e.changedTouches[0].clientX
     if (Math.abs(diff) > 50) {
+      swiped.current = true
       if (diff > 0) setActive(prev => (prev + 1) % items.length)
       else setActive(prev => (prev - 1 + items.length) % items.length)
-      // Reset auto-rotate timer
       if (timerRef.current) clearInterval(timerRef.current)
       timerRef.current = setInterval(() => setActive(prev => (prev + 1) % items.length), 6000)
+    } else {
+      swiped.current = false
     }
   }
+
+  // Tap on poster card → open detail page (only if not swiping)
+  const handlePosterTap = () => {
+    if (swiped.current) { swiped.current = false; return }
+    router.push(`/detail/${item.type}/${item.tmdb_id}`)
+  }
+
+  // My List toggle
+  const [addedToList, setAddedToList] = useState(false)
+  const toggleMyList = useCallback(async () => {
+    const pid = localStorage.getItem('streamcorn_profile_id')
+    if (!pid) return
+    try {
+      const res = await fetch('/api/watchlist', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ profile_id: pid, tmdb_id: item.tmdb_id, type: item.type }),
+      })
+      const data = await res.json()
+      setAddedToList(data.added)
+    } catch {}
+  }, [item.tmdb_id, item.type])
 
   return (
     <div
@@ -82,8 +110,8 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
       onTouchStart={handleSwipeStart}
       onTouchEnd={handleSwipeEnd}
     >
-      {/* Poster card */}
-      <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl shadow-purple-900/30" style={{ aspectRatio: '2/3', maxHeight: '70vh', border: '1px solid rgba(255,255,255,0.12)' }}>
+      {/* Poster card — tap to open detail */}
+      <div onClick={handlePosterTap} className="relative w-full rounded-2xl overflow-hidden shadow-2xl shadow-purple-900/30 cursor-pointer" style={{ aspectRatio: '2/3', maxHeight: '70vh', border: '1px solid rgba(255,255,255,0.12)' }}>
         {poster && (
           <img
             key={active}
@@ -112,7 +140,7 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
           )}
 
           {/* Buttons */}
-          <div className="flex gap-3">
+          <div className="flex gap-3" onClick={e => e.stopPropagation()}>
             <Link
               href={item.type === 'movie' ? `/watch/movie/${item.tmdb_id}` : `/watch/tv/${item.tmdb_id}?s=1&e=1`}
               className="flex-1 flex items-center justify-center gap-2 bg-white text-black font-bold py-3 rounded-lg text-sm active:bg-white/80"
@@ -122,15 +150,17 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="black"><path d="M8 5v14l11-7z" /></svg>
               Play
             </Link>
-            <Link
-              href={`/detail/${item.type}/${item.tmdb_id}`}
-              className="flex-1 flex items-center justify-center gap-2 bg-white/15 backdrop-blur text-white font-bold py-3 rounded-lg text-sm active:bg-white/25"
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleMyList() }}
+              className={`flex-1 flex items-center justify-center gap-2 backdrop-blur font-bold py-3 rounded-lg text-sm active:bg-white/25 ${addedToList ? 'bg-white/25 text-white' : 'bg-white/15 text-white'}`}
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M12 4v16m8-8H4" />
-              </svg>
+              {addedToList ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M12 4v16m8-8H4" /></svg>
+              )}
               My List
-            </Link>
+            </button>
           </div>
         </div>
       </div>

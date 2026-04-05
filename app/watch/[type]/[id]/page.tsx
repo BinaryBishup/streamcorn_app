@@ -26,6 +26,7 @@ export default function WatchPage() {
   const [ready, setReady] = useState(false), [fit, setFit] = useState<'cover' | 'contain'>('cover')
   const [showTopBar, setShowTopBar] = useState(true)
   const [showSettings, setShowSettings] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<'audio' | 'playback'>('audio')
   const [audioTracks, setAudioTracks] = useState<{ id: number; label: string }[]>([])
   const [subsEnabled, setSubsEnabled] = useState(false)
   const [playbackRate, setPlaybackRate] = useState(1)
@@ -263,87 +264,106 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* ═══ Settings Modal ═══ */}
+      {/* ═══ Settings Modal — Two Tabs ═══ */}
       {showSettings && (
         <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeSettings}>
-          <div style={{ background: '#1a1a1a', borderRadius: 16, padding: 24, width: '90%', maxWidth: 400, maxHeight: '80vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-              <h2 style={{ color: '#fff', fontSize: 18, fontWeight: 700, margin: 0 }}>Settings</h2>
+          <div style={{ background: '#1a1a1a', borderRadius: 16, width: '90%', maxWidth: 400, maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+            {/* Header + close */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 0' }}>
+              <h2 style={{ color: '#fff', fontSize: 17, fontWeight: 700, margin: 0 }}>Settings</h2>
               <button onClick={closeSettings} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: 4 }}>
-                <svg width="24" height="24" viewBox="0 -960 960 960" fill="currentColor"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
+                <svg width="22" height="22" viewBox="0 -960 960 960" fill="currentColor"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
               </button>
             </div>
 
-            {/* Playback Speed */}
-            <div style={{ marginBottom: 28 }}>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Playback Speed</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
-                  <button key={r} onClick={() => changeSpeed(r)} style={{
-                    padding: '10px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                    background: playbackRate === r ? '#e50914' : 'rgba(255,255,255,0.08)',
-                    color: playbackRate === r ? '#fff' : 'rgba(255,255,255,0.6)',
-                  }}>{r === 1 ? 'Normal' : `${r}x`}</button>
-                ))}
-              </div>
+            {/* Tabs */}
+            <div style={{ display: 'flex', gap: 4, padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <button onClick={() => setSettingsTab('audio')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: settingsTab === 'audio' ? '#fff' : 'rgba(255,255,255,0.08)', color: settingsTab === 'audio' ? '#000' : 'rgba(255,255,255,0.5)' }}>Audio & Captions</button>
+              <button onClick={() => setSettingsTab('playback')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: settingsTab === 'playback' ? '#fff' : 'rgba(255,255,255,0.08)', color: settingsTab === 'playback' ? '#000' : 'rgba(255,255,255,0.5)' }}>Playback</button>
             </div>
 
-            {/* Screen Fit */}
-            <div style={{ marginBottom: 28 }}>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Screen Fit</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <button onClick={() => setFit('cover')} style={{
-                  padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  background: fit === 'cover' ? '#e50914' : 'rgba(255,255,255,0.08)',
-                  color: fit === 'cover' ? '#fff' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600,
-                }}>
-                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="currentColor"><path d="M120-120v-200h80v120h120v80H120Zm520 0v-80h120v-120h80v200H640ZM120-640v-200h200v80H200v120h-80Zm640 0v-120H640v-80h200v200h-80Z"/></svg>
-                  Fill Screen
-                </button>
-                <button onClick={() => setFit('contain')} style={{
-                  padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  background: fit === 'contain' ? '#e50914' : 'rgba(255,255,255,0.08)',
-                  color: fit === 'contain' ? '#fff' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600,
-                }}>
-                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-280q-33 0-56.5-23.5T120-360v-240q0-33 23.5-56.5T200-680h560q33 0 56.5 23.5T840-600v240q0 33-23.5 56.5T760-280H200Zm0-80h560v-240H200v240Z"/></svg>
-                  Original
-                </button>
-              </div>
-            </div>
+            {/* Tab content */}
+            <div style={{ padding: 20, overflowY: 'auto' }}>
+              {settingsTab === 'audio' && (
+                <>
+                  {/* Audio Tracks */}
+                  <div style={{ marginBottom: 24 }}>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Audio</p>
+                    {audioTracks.length <= 1 ? (
+                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Default audio</p>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {audioTracks.map(t => (
+                          <button key={t.id} onClick={() => setAudioTrack(t.id)} style={{
+                            width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                            background: hlsRef.current?.audioTrack === t.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
+                            color: hlsRef.current?.audioTrack === t.id ? '#e50914' : '#fff', fontSize: 14,
+                            display: 'flex', alignItems: 'center', gap: 10,
+                          }}>
+                            <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z"/></svg>
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
 
-            {/* Subtitles */}
-            <div style={{ marginBottom: 28 }}>
-              <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Subtitles</p>
-              <button onClick={() => setSubsEnabled(!subsEnabled)} style={{
-                width: '100%', padding: '12px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                background: subsEnabled ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.08)',
-                color: subsEnabled ? '#e50914' : '#fff', fontSize: 14, display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-                <svg width="20" height="20" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-160q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h560q33 0 56.5 23.5T840-720v480q0 33-23.5 56.5T760-160H200Zm80-200h120q17 0 28.5-11.5T440-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T400-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm280 0h120q17 0 28.5-11.5T720-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T680-600H560q-17 0-28.5 11.5T520-560v160q0 17 11.5 28.5T560-360Z"/></svg>
-                {subsEnabled ? 'Subtitles On' : 'Subtitles Off'}
-              </button>
-            </div>
-
-            {/* Audio Tracks */}
-            {audioTracks.length > 1 && (
-              <div>
-                <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, margin: '0 0 12px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Audio Track</p>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  {audioTracks.map(t => (
-                    <button key={t.id} onClick={() => setAudioTrack(t.id)} style={{
-                      width: '100%', textAlign: 'left', padding: '12px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                      background: hlsRef.current?.audioTrack === t.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
-                      color: hlsRef.current?.audioTrack === t.id ? '#e50914' : '#fff', fontSize: 14,
-                      display: 'flex', alignItems: 'center', gap: 10,
+                  {/* Subtitles */}
+                  <div>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Captions</p>
+                    <button onClick={() => setSubsEnabled(!subsEnabled)} style={{
+                      width: '100%', padding: '12px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                      background: subsEnabled ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
+                      color: subsEnabled ? '#e50914' : '#fff', fontSize: 14, display: 'flex', alignItems: 'center', gap: 10,
                     }}>
-                      <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z"/></svg>
-                      {t.label}
+                      <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-160q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h560q33 0 56.5 23.5T840-720v480q0 33-23.5 56.5T760-160H200Zm80-200h120q17 0 28.5-11.5T440-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T400-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm280 0h120q17 0 28.5-11.5T720-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T680-600H560q-17 0-28.5 11.5T520-560v160q0 17 11.5 28.5T560-360Z"/></svg>
+                      {subsEnabled ? 'Captions On' : 'Captions Off'}
                     </button>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
+                </>
+              )}
+
+              {settingsTab === 'playback' && (
+                <>
+                  {/* Speed */}
+                  <div style={{ marginBottom: 24 }}>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Speed</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+                      {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
+                        <button key={r} onClick={() => changeSpeed(r)} style={{
+                          padding: '10px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+                          background: playbackRate === r ? '#e50914' : 'rgba(255,255,255,0.08)',
+                          color: playbackRate === r ? '#fff' : 'rgba(255,255,255,0.6)',
+                        }}>{r === 1 ? 'Normal' : `${r}x`}</button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Screen Fit */}
+                  <div>
+                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Screen</p>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <button onClick={() => setFit('cover')} style={{
+                        padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        background: fit === 'cover' ? '#e50914' : 'rgba(255,255,255,0.08)',
+                        color: fit === 'cover' ? '#fff' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600,
+                      }}>
+                        <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M120-120v-200h80v120h120v80H120Zm520 0v-80h120v-120h80v200H640ZM120-640v-200h200v80H200v120h-80Zm640 0v-120H640v-80h200v200h-80Z"/></svg>
+                        Fill
+                      </button>
+                      <button onClick={() => setFit('contain')} style={{
+                        padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                        background: fit === 'contain' ? '#e50914' : 'rgba(255,255,255,0.08)',
+                        color: fit === 'contain' ? '#fff' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600,
+                      }}>
+                        <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-280q-33 0-56.5-23.5T120-360v-240q0-33 23.5-56.5T200-680h560q33 0 56.5 23.5T840-600v240q0 33-23.5 56.5T760-280H200Zm0-80h560v-240H200v240Z"/></svg>
+                        Original
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
