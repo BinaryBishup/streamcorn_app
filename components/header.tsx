@@ -16,11 +16,25 @@ export function Header() {
 
   useEffect(() => {
     if (pathname !== '/') return
+    // Try cached profiles first
+    try {
+      const cached = localStorage.getItem('sc_cache_profiles')
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached)
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          setProfiles(data)
+          const savedId = localStorage.getItem('streamcorn_profile_id')
+          setActiveProfile(data.find((p: Profile) => p.id === savedId) || data[0] || null)
+        }
+      }
+    } catch {}
+    // Fetch fresh in background
     fetch('/api/profiles').then(r => r.json()).then(d => {
       const profs = d.profiles || []
       setProfiles(profs)
       const savedId = localStorage.getItem('streamcorn_profile_id')
       setActiveProfile(profs.find((p: Profile) => p.id === savedId) || profs[0] || null)
+      try { localStorage.setItem('sc_cache_profiles', JSON.stringify({ data: profs, timestamp: Date.now() })) } catch {}
     }).catch(() => {})
   }, [pathname])
 

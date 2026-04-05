@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { fetchProgress, type WatchProgressRow } from '@/lib/watch-progress'
+import { getCached, setCache } from '@/lib/cache'
 
 const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
 
@@ -70,7 +71,10 @@ export default function DetailPage() {
     async function load() {
       try {
         const ep = type === 'movie' ? `/movie/${id}` : `/tv/${id}`
-        const d = await fetch(`https://api.themoviedb.org/3${ep}?api_key=${TMDB_KEY}&append_to_response=credits,videos`).then(r => r.json())
+        // Try cached data first (prefetched from content row touch)
+        const cached = getCached<any>(`detail_${type}_${id}`)
+        const d = cached || await fetch(`https://api.themoviedb.org/3${ep}?api_key=${TMDB_KEY}&append_to_response=credits,videos`).then(r => r.json())
+        if (!cached) setCache(`detail_${type}_${id}`, d)
         const trailer = (d.videos?.results || []).find((v: any) => v.type === 'Trailer' && v.site === 'YouTube')
         setDetails({
           id: d.id, title: d.title || d.name || '', overview: d.overview || '',

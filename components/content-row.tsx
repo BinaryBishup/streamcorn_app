@@ -1,6 +1,20 @@
 'use client'
 
 import Link from 'next/link'
+import { setCache } from '@/lib/cache'
+
+const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
+
+function prefetchDetail(tmdbId: number, type: string) {
+  const key = `detail_${type}_${tmdbId}`
+  // Only prefetch once
+  if (sessionStorage.getItem(key)) return
+  sessionStorage.setItem(key, '1')
+  fetch(`https://api.themoviedb.org/3/${type}/${tmdbId}?api_key=${TMDB_KEY}&append_to_response=credits,videos`)
+    .then(r => r.json())
+    .then(d => setCache(`detail_${type}_${tmdbId}`, d))
+    .catch(() => {})
+}
 
 interface ContentItem {
   tmdb_id: number
@@ -23,6 +37,7 @@ export function ContentRow({ title, items }: { title: string; items: ContentItem
             key={`${item.type}-${item.tmdb_id}`}
             href={`/detail/${item.type}/${item.tmdb_id}`}
             className="flex-shrink-0 w-[110px]"
+            onTouchStart={() => prefetchDetail(item.tmdb_id, item.type)}
           >
             <div className="aspect-[2/3] rounded-lg overflow-hidden bg-[#1a1a1a] relative">
               {item.poster_path ? (
