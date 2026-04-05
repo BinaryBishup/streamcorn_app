@@ -156,7 +156,7 @@ export default function WatchPage() {
   useEffect(() => { const t = setTimeout(async () => { const el = document.getElementById('player-root'); if (!el) return; try { if (el.requestFullscreen) await el.requestFullscreen(); else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen() } catch {}; try { await (screen.orientation as any)?.lock?.('landscape') } catch {} }, 300); return () => clearTimeout(t) }, [ready])
 
   // ── Controls ───────────────────────────────────────────────────────────
-  const resetTimer = useCallback(() => { if (controlsTimer.current) clearTimeout(controlsTimer.current); setShowControls(true); controlsTimer.current = setTimeout(() => { if (!isScrubbing) setShowControls(false) }, 4000) }, [isScrubbing])
+  const resetTimer = useCallback(() => { if (controlsTimer.current) clearTimeout(controlsTimer.current); setShowControls(true); controlsTimer.current = setTimeout(() => { if (!isScrubbing) setShowControls(false) }, 3000) }, [isScrubbing])
   useEffect(() => { if (isScrubbing) { if (controlsTimer.current) clearTimeout(controlsTimer.current); setShowControls(true) } }, [isScrubbing])
 
   const handleVideoAreaTap = (e: React.TouchEvent) => {
@@ -177,7 +177,8 @@ export default function WatchPage() {
 
   const progress = dur > 0 ? (ct / dur) * 100 : 0
   const stopProp = (e: React.TouchEvent | React.MouseEvent) => e.stopPropagation()
-  const btnStyle: React.CSSProperties = { background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, fontSize: 10, padding: '4px 0', minWidth: 44 }
+  const btnStyle: React.CSSProperties = { background: 'none', border: 'none', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '6px 0' }
+  const iconBtnStyle: React.CSSProperties = { background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 6 }
 
   if (!ready || !src) return (
     <div style={{ position: 'fixed', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
@@ -199,66 +200,73 @@ export default function WatchPage() {
       {/* Controls */}
       {!locked && (
         <div data-controls style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', opacity: showControls && !loading ? 1 : 0, pointerEvents: showControls && !loading ? 'auto' : 'none', transition: 'opacity 0.25s ease' }}>
-          {/* Top */}
+          {/* Top bar */}
           <div onTouchEnd={stopProp} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'linear-gradient(to bottom, rgba(0,0,0,0.7), transparent)' }}>
-            <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#fff', padding: 0 }}><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}><path d="M15 19l-7-7 7-7" /></svg></button>
+            <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#fff', padding: 0 }}>
+              <svg width="24" height="24" viewBox="0 -960 960 960" fill="white"><path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z"/></svg>
+            </button>
             <div style={{ flex: 1, minWidth: 0 }}>
               <p style={{ color: '#fff', fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{title}</p>
               {epTitle && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, margin: 0 }}>{epTitle}</p>}
             </div>
-          </div>
-
-          {/* Center */}
-          <div onTouchEnd={stopProp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 56, alignSelf: 'center' }}>
-            <button onClick={() => seekBy(-10)} style={{ background: 'none', border: 'none', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center' }}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M12.5 8.5l-4 3.5 4 3.5M4 12a8 8 0 1116 0 8 8 0 01-16 0z" /></svg><span style={{ fontSize: 10, marginTop: -4 }}>10</span></button>
-            <button onClick={togglePlay} style={{ width: 64, height: 64, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-              {playing ? <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg> : <svg width="28" height="28" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>}
+            {/* Top right: Fit + Lock */}
+            <button onClick={() => setFit(f => f === 'cover' ? 'contain' : 'cover')} style={iconBtnStyle}>
+              {fit === 'cover'
+                ? <svg width="22" height="22" viewBox="0 -960 960 960" fill="white"><path d="M200-280q-33 0-56.5-23.5T120-360v-240q0-33 23.5-56.5T200-680h560q33 0 56.5 23.5T840-600v240q0 33-23.5 56.5T760-280H200Zm0-80h560v-240H200v240Z"/></svg>
+                : <svg width="22" height="22" viewBox="0 -960 960 960" fill="white"><path d="M120-120v-200h80v120h120v80H120Zm520 0v-80h120v-120h80v200H640ZM120-640v-200h200v80H200v120h-80Zm640 0v-120H640v-80h200v200h-80Z"/></svg>
+              }
             </button>
-            <button onClick={() => seekBy(10)} style={{ background: 'none', border: 'none', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center' }}><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}><path d="M11.5 8.5l4 3.5-4 3.5M20 12a8 8 0 11-16 0 8 8 0 0116 0z" /></svg><span style={{ fontSize: 10, marginTop: -4 }}>10</span></button>
+            <button onClick={() => { setLocked(true); setShowControls(false) }} style={iconBtnStyle}>
+              <svg width="22" height="22" viewBox="0 -960 960 960" fill="white"><path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm240-200q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Z"/></svg>
+            </button>
           </div>
 
-          {/* Bottom */}
-          <div onTouchEnd={stopProp} style={{ padding: '0 16px 12px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}>
-            {/* Time display only — seekbar is native video controls below */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+          {/* Center play controls */}
+          <div onTouchEnd={stopProp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 56, alignSelf: 'center' }}>
+            <button onClick={() => seekBy(-10)} style={{ background: 'none', border: 'none', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <svg width="40" height="40" viewBox="0 -960 960 960" fill="white"><path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/></svg>
+              <span style={{ fontSize: 10, marginTop: -2 }}>10</span>
+            </button>
+            <button onClick={togglePlay} style={{ width: 64, height: 64, background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: 'none', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+              {playing
+                ? <svg width="32" height="32" viewBox="0 -960 960 960" fill="white"><path d="M560-200v-560h160v560H560Zm-320 0v-560h160v560H240Z"/></svg>
+                : <svg width="32" height="32" viewBox="0 -960 960 960" fill="white"><path d="M320-200v-560l440 280-440 280Z"/></svg>
+              }
+            </button>
+            <button onClick={() => seekBy(10)} style={{ background: 'none', border: 'none', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+              <svg width="40" height="40" viewBox="0 -960 960 960" fill="white"><path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440q0-75 28.5-140.5t77-114q48.5-48.5 114-77T480-800h6l-62-62 56-58 160 160-160 160-56-58 62-62h-6q-117 0-198.5 81.5T200-440q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440h80q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/></svg>
+              <span style={{ fontSize: 10, marginTop: -2 }}>10</span>
+            </button>
+          </div>
+
+          {/* Bottom: time + action row below seekbar */}
+          <div onTouchEnd={stopProp} style={{ padding: '0 16px 6px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}>
+            {/* Time display */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
               <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(ct)}</span>
               <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>-{fmtTime(Math.max(0, dur - ct))}</span>
             </div>
 
-            {/* Action row — equidistant, white icons, Google Material style */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
+            {/* Action row — inline icon + label, evenly spaced */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', paddingTop: 4 }}>
+              {/* Subtitles */}
+              <button onClick={() => setSubsEnabled(!subsEnabled)} style={{ ...btnStyle, color: subsEnabled ? '#e50914' : '#fff' }}>
+                <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-160q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h560q33 0 56.5 23.5T840-720v480q0 33-23.5 56.5T760-160H200Zm80-200h120q17 0 28.5-11.5T440-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T400-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm280 0h120q17 0 28.5-11.5T720-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T680-600H560q-17 0-28.5 11.5T520-560v160q0 17 11.5 28.5T560-360Z"/></svg>
+                <span>Subtitles</span>
+              </button>
+
               {/* Audio */}
               {audioTracks.length > 1 && (
                 <button onClick={() => { setShowAudioSheet(!showAudioSheet); setShowEpisodeSheet(false) }} style={btnStyle}>
-                  {/* Material: volume_up */}
-                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z"/></svg>
+                  <svg width="18" height="18" viewBox="0 -960 960 960" fill="white"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z"/></svg>
                   <span>Audio</span>
                 </button>
               )}
 
-              {/* Subtitles */}
-              <button onClick={() => setSubsEnabled(!subsEnabled)} style={{ ...btnStyle, color: subsEnabled ? '#e50914' : '#fff' }}>
-                {/* Material: closed_caption */}
-                <svg width="20" height="20" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-160q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h560q33 0 56.5 23.5T840-720v480q0 33-23.5 56.5T760-160H200Zm80-200h120q17 0 28.5-11.5T440-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T400-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm280 0h120q17 0 28.5-11.5T720-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T680-600H560q-17 0-28.5 11.5T520-560v160q0 17 11.5 28.5T560-360Z"/></svg>
-                <span>Subtitles</span>
-              </button>
-
-              {/* Fit toggle */}
-              <button onClick={() => setFit(f => f === 'cover' ? 'contain' : 'cover')} style={btnStyle}>
-                {/* Material: fit_screen / aspect_ratio */}
-                {fit === 'cover' ? (
-                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M200-280q-33 0-56.5-23.5T120-360v-240q0-33 23.5-56.5T200-680h560q33 0 56.5 23.5T840-600v240q0 33-23.5 56.5T760-280H200Zm0-80h560v-240H200v240Z"/></svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M120-120v-200h80v120h120v80H120Zm520 0v-80h120v-120h80v200H640ZM120-640v-200h200v80H200v120h-80Zm640 0v-120H640v-80h200v200h-80Z"/></svg>
-                )}
-                <span>{fit === 'cover' ? '16:9' : 'Fill'}</span>
-              </button>
-
               {/* Next Episode (TV only) */}
               {type === 'tv' && hasNext && (
                 <button onClick={handleNextEp} style={btnStyle}>
-                  {/* Material: skip_next */}
-                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
+                  <svg width="18" height="18" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
                   <span>Next</span>
                 </button>
               )}
@@ -266,18 +274,10 @@ export default function WatchPage() {
               {/* Episodes (TV only) */}
               {type === 'tv' && episodes.length > 0 && (
                 <button onClick={() => { setShowEpisodeSheet(!showEpisodeSheet); setShowAudioSheet(false) }} style={btnStyle}>
-                  {/* Material: video_library */}
-                  <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M320-400h480L650-580l-130 170-96-122-104 132ZM240-240q-33 0-56.5-23.5T160-320v-480q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H240ZM80-80v-560h80v480h560v80H80Z"/></svg>
+                  <svg width="18" height="18" viewBox="0 -960 960 960" fill="white"><path d="M320-400h480L650-580l-130 170-96-122-104 132ZM240-240q-33 0-56.5-23.5T160-320v-480q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H240ZM80-80v-560h80v480h560v80H80Z"/></svg>
                   <span>Episodes</span>
                 </button>
               )}
-
-              {/* Lock */}
-              <button onClick={() => { setLocked(true); setShowControls(false) }} style={btnStyle}>
-                {/* Material: lock */}
-                <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M240-80q-33 0-56.5-23.5T160-160v-400q0-33 23.5-56.5T240-640h40v-80q0-83 58.5-141.5T480-920q83 0 141.5 58.5T680-720v80h40q33 0 56.5 23.5T800-560v400q0 33-23.5 56.5T720-80H240Zm240-200q33 0 56.5-23.5T560-360q0-33-23.5-56.5T480-440q-33 0-56.5 23.5T400-360q0 33 23.5 56.5T480-280ZM360-640h240v-80q0-50-35-85t-85-35q-50 0-85 35t-35 85v80Z"/></svg>
-                <span>Lock</span>
-              </button>
             </div>
           </div>
         </div>
