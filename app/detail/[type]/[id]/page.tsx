@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { fetchProgress, type WatchProgressRow } from '@/lib/watch-progress'
 
 const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
 
@@ -39,6 +40,7 @@ export default function DetailPage() {
   const [episodes, setEpisodes] = useState<Episode[]>([])
   const [loadingEps, setLoadingEps] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [progress, setProgress] = useState<WatchProgressRow | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -60,6 +62,17 @@ export default function DetailPage() {
     }
     load()
   }, [type, id])
+
+  // Fetch watch progress for resume
+  useEffect(() => {
+    const pid = localStorage.getItem('streamcorn_profile_id')
+    if (!pid) return
+    fetchProgress(pid).then(items => {
+      const tmdbId = parseInt(id)
+      const match = items.find(r => r.tmdb_id === tmdbId && r.type === type && !r.completed && r.progress_seconds > 10)
+      if (match) setProgress(match)
+    })
+  }, [id, type])
 
   useEffect(() => {
     if (type !== 'tv' || !details) return
@@ -99,10 +112,36 @@ export default function DetailPage() {
           <span className="px-1.5 py-0.5 border border-white/20 rounded text-[10px]">HD</span>
         </div>
 
-        <Link href={type === 'movie' ? `/watch/movie/${id}` : `/watch/tv/${id}?s=${selectedSeason}&e=${episodes[0]?.episode_number || 1}`}
-          className="flex items-center justify-center gap-2 bg-white text-black font-bold py-3 rounded-xl text-sm mb-3 w-full active:bg-white/80">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="black"><path d="M8 5v14l11-7z"/></svg>Play
-        </Link>
+        {/* Play / Resume button */}
+        {(() => {
+          const resumeHref = progress
+            ? (type === 'movie'
+              ? `/watch/movie/${id}`
+              : `/watch/tv/${id}?s=${progress.season_number || 1}&e=${progress.episode_number || 1}`)
+            : (type === 'movie'
+              ? `/watch/movie/${id}`
+              : `/watch/tv/${id}?s=${selectedSeason}&e=${episodes[0]?.episode_number || 1}`)
+          const progressPct = progress && progress.duration_seconds > 0
+            ? Math.min(100, (progress.progress_seconds / progress.duration_seconds) * 100)
+            : 0
+          const resumeLabel = progress
+            ? (type === 'tv'
+              ? `Resume S${progress.season_number}:E${progress.episode_number}`
+              : 'Resume')
+            : 'Play'
+          return (
+            <Link href={resumeHref}
+              className="relative block w-full bg-white rounded-xl mb-3 overflow-hidden active:bg-white/80">
+              {progress && progressPct > 0 && (
+                <div className="absolute bottom-0 left-0 h-[3px] bg-[#e50914] rounded-full" style={{ width: `${progressPct}%` }} />
+              )}
+              <div className="flex items-center justify-center gap-2 text-black font-bold py-3 text-sm">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="black"><path d="M8 5v14l11-7z"/></svg>
+                {resumeLabel}
+              </div>
+            </Link>
+          )
+        })()}
 
         {/* Description with read more */}
         <div className="mb-5">
