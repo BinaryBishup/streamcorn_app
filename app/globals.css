@@ -64,3 +64,46 @@ html, body {
 #player-root video::-moz-fullscreen-button {
   display: none !important;
 }
+
+/* Native range seekbar styled red */
+.player-seekbar {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  outline: none;
+}
+.player-seekbar::-webkit-slider-runnable-track {
+  height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 9999px;
+}
+.player-seekbar::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e50914;
+  border: none;
+  margin-top: -5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.player-seekbar::-moz-range-track {
+  height: 4px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 9999px;
+  border: none;
+}
+.player-seekbar::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #e50914;
+  border: none;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.player-seekbar::-moz-range-progress {
+  height: 4px;
+  background: #e50914;
+  border-radius: 9999px;
+}

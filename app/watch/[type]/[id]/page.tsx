@@ -27,7 +27,6 @@ export default function WatchPage() {
   const seasonNum = type === 'tv' ? season : undefined, episodeNum = type === 'tv' ? episode : undefined
 
   const videoRef = useRef<HTMLVideoElement>(null), hlsRef = useRef<Hls | null>(null)
-  const scrubberRef = useRef<HTMLDivElement>(null)
   const lastSaveTs = useRef(0), profileIdRef = useRef<string | null>(null), resumeRef = useRef<number | null>(null)
   const controlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const doubleTapTimer = useRef<ReturnType<typeof setTimeout> | null>(null), tapCount = useRef(0)
@@ -175,12 +174,15 @@ export default function WatchPage() {
   const handleNextEp = () => { const idx = episodes.findIndex(ep => ep.episode_number === episode); if (idx < episodes.length - 1) router.push(`/watch/tv/${id}?s=${season}&e=${episodes[idx + 1].episode_number}`) }
   const setAudioTrack = (trackId: number) => { if (hlsRef.current) hlsRef.current.audioTrack = trackId; setShowAudioSheet(false) }
 
-  // Scrubber
-  const scrubTo = useCallback((clientX: number) => { const bar = scrubberRef.current; const v = videoRef.current; if (!bar || !v || !v.duration) return; const rect = bar.getBoundingClientRect(); v.currentTime = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)) * v.duration; setCt(v.currentTime) }, [])
-  const onScrubStart = (e: React.TouchEvent) => { e.stopPropagation(); e.preventDefault(); setIsScrubbing(true); scrubTo(e.touches[0].clientX) }
-  const onScrubMove = (e: React.TouchEvent) => { e.stopPropagation(); e.preventDefault(); scrubTo(e.touches[0].clientX) }
-  const onScrubEnd = (e: React.TouchEvent) => { e.stopPropagation(); e.preventDefault(); setIsScrubbing(false); resetTimer() }
-  const onScrubMouse = (e: React.MouseEvent) => { e.stopPropagation(); e.preventDefault(); setIsScrubbing(true); scrubTo(e.clientX); const onMove = (ev: MouseEvent) => { ev.preventDefault(); scrubTo(ev.clientX) }; const onUp = () => { setIsScrubbing(false); resetTimer(); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }; document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp) }
+  // Seekbar via native range input (reliable drag on all mobile browsers)
+  const onSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = videoRef.current; if (!v || !v.duration) return
+    const newTime = (parseFloat(e.target.value) / 100) * v.duration
+    v.currentTime = newTime
+    setCt(newTime)
+  }
+  const onSeekStart = () => { setIsScrubbing(true) }
+  const onSeekEnd = () => { setIsScrubbing(false); resetTimer() }
 
   const progress = dur > 0 ? (ct / dur) * 100 : 0
   const stopProp = (e: React.TouchEvent | React.MouseEvent) => e.stopPropagation()
@@ -228,17 +230,23 @@ export default function WatchPage() {
 
           {/* Bottom */}
           <div onTouchEnd={stopProp} style={{ padding: '0 16px 12px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}>
-            {/* Scrubber */}
+            {/* Seekbar — native range input for reliable mobile drag */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontVariantNumeric: 'tabular-nums', width: 44 }}>{fmtTime(ct)}</span>
-              <div ref={scrubberRef} style={{ flex: 1, padding: '18px 0', touchAction: 'none', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none' }}
-                onTouchStart={onScrubStart} onTouchMove={onScrubMove} onTouchEnd={onScrubEnd} onMouseDown={onScrubMouse}>
-                <div style={{ width: '100%', height: isScrubbing ? 6 : 3, background: 'rgba(255,255,255,0.2)', borderRadius: 9999, position: 'relative', transition: 'height 0.15s' }}>
-                  <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${buffered}%`, background: 'rgba(255,255,255,0.15)', borderRadius: 9999 }} />
-                  <div style={{ height: '100%', width: `${progress}%`, background: '#e50914', borderRadius: 9999 }} />
-                  <div style={{ position: 'absolute', top: '50%', left: `${progress}%`, transform: 'translate(-50%, -50%)', width: isScrubbing ? 18 : 12, height: isScrubbing ? 18 : 12, background: '#e50914', borderRadius: '50%', boxShadow: '0 2px 8px rgba(0,0,0,0.5)', transition: 'width 0.15s, height 0.15s' }} />
-                </div>
-              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={0.1}
+                value={progress}
+                onChange={onSeekInput}
+                onTouchStart={onSeekStart}
+                onTouchEnd={onSeekEnd}
+                onMouseDown={onSeekStart}
+                onMouseUp={onSeekEnd}
+                className="player-seekbar"
+                style={{ flex: 1, height: 36, margin: 0, padding: 0, background: 'transparent', cursor: 'pointer' }}
+              />
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'right' }}>-{fmtTime(Math.max(0, dur - ct))}</span>
             </div>
 
