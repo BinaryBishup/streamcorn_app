@@ -47,7 +47,7 @@ export function Header() {
       <Link href="/"><img src="/icons/streamcorn_full_logo.png" alt="Streamcorn" className="h-5 drop-shadow-lg" /></Link>
       <div className="flex items-center gap-2">
         <Link href="/search" className="w-9 h-9 flex items-center justify-center">
-          <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M784-120 532-372q-30 24-69 38t-83 14q-109 0-184.5-75.5T120-580q0-109 75.5-184.5T380-840q109 0 184.5 75.5T640-580q0 44-14 83t-38 69l252 252-56 56ZM380-400q75 0 127.5-52.5T560-580q0-75-52.5-127.5T380-760q-75 0-127.5 52.5T200-580q0 75 52.5 127.5T380-400Z"/></svg>
+          <img src="/icons/search.svg" alt="Search" className="w-5 h-5" style={{ filter: 'brightness(0) invert(1)' }} />
         </Link>
         <div className="relative" ref={dropdownRef}>
           <button onClick={() => setShowDropdown(!showDropdown)} className="w-8 h-8 rounded-lg overflow-hidden bg-[#e50914] flex items-center justify-center shadow-lg">
