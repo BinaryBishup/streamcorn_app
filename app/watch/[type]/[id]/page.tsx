@@ -26,12 +26,13 @@ export default function WatchPage() {
   const lastSaveTs = useRef(0)
   const profileIdRef = useRef<string | null>(null)
   const resumeRef = useRef<number | null>(null)
-  const hasEnteredFullscreen = useRef(false)
 
   const [src, setSrc] = useState<string | null>(null)
   const [title, setTitle] = useState('')
   const [ready, setReady] = useState(false)
   const [fit, setFit] = useState<'cover' | 'contain'>('cover')
+  const [isLandscape, setIsLandscape] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
 
   // ── Cleanup old service workers ────────────────────────────────────────
   useEffect(() => {
@@ -53,35 +54,30 @@ export default function WatchPage() {
   // ── Fetch source + resume position ─────────────────────────────────────
   useEffect(() => {
     let cancelled = false
-
     async function load() {
       const pid = localStorage.getItem('streamcorn_profile_id')
       profileIdRef.current = pid
-
       const queryParams = new URLSearchParams({ tmdb_id: id, type })
       if (type === 'tv') {
         queryParams.set('season_number', String(season))
         queryParams.set('episode_number', String(episode))
       }
-
       const [srcRes, detailRes, resume] = await Promise.all([
         fetch(`/api/video-source?${queryParams}`).then(r => r.json()),
         fetch(`https://api.themoviedb.org/3/${type}/${id}?api_key=${TMDB_KEY}`).then(r => r.json()),
         pid ? getResumePosition(pid, tmdbId, mediaType, seasonNum, episodeNum) : null,
       ])
-
       if (cancelled) return
       setSrc(srcRes.url || null)
       setTitle(detailRes.title || detailRes.name || '')
       resumeRef.current = resume
       setReady(true)
     }
-
     load()
     return () => { cancelled = true }
   }, [id, type, season, episode, tmdbId, mediaType, seasonNum, episodeNum])
 
-  // ── Beacon save for page leave ───────────────────────────────────────
+  // ── Beacon save for page leave ─────────────────────────────────────────
   const doBeacon = useCallback(() => {
     const v = videoRef.current
     const pid = profileIdRef.current
@@ -92,7 +88,6 @@ export default function WatchPage() {
     beaconProgress(buildPayload(pid, tmdbId, mediaType, c, d, seasonNum, episodeNum))
   }, [tmdbId, mediaType, seasonNum, episodeNum])
 
-  // ── Save on visibility change / page leave ─────────────────────────────
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === 'hidden') doBeacon() }
     document.addEventListener('visibilitychange', onVis)
@@ -106,7 +101,7 @@ export default function WatchPage() {
     }
   }, [doBeacon])
 
-  // ── Attach hls.js ──────────────────────────────────────────────────────
+  // ── Attach hls.js + progress listeners ─────────────────────────────────
   useEffect(() => {
     const v = videoRef.current
     if (!v || !src) return
@@ -162,100 +157,145 @@ export default function WatchPage() {
     }
   }, [src, tmdbId, mediaType, seasonNum, episodeNum])
 
-  // ── Force landscape + fullscreen ───────────────────────────────────────
+  // ── Orientation + fullscreen tracking ──────────────────────────────────
   useEffect(() => {
-    // CSS transform for immediate landscape (no user gesture needed)
-    document.documentElement.classList.add('force-landscape')
-
-    // Try native orientation lock
-    const tryLock = async () => {
-      try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
+    const checkOrientation = () => {
+      const landscape = window.innerWidth > window.innerHeight
+      setIsLandscape(landscape)
     }
-    tryLock()
+    checkOrientation()
+    window.addEventListener('resize', checkOrientation)
 
-    // Re-lock if user rotates to portrait
-    const onOrientationChange = () => {
-      if (screen.orientation?.type?.includes('portrait')) {
-        tryLock()
-      }
+    const onFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement)
     }
-    screen.orientation?.addEventListener('change', onOrientationChange)
+    document.addEventListener('fullscreenchange', onFullscreenChange)
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange)
 
     return () => {
-      document.documentElement.classList.remove('force-landscape')
-      screen.orientation?.removeEventListener('change', onOrientationChange)
+      window.removeEventListener('resize', checkOrientation)
+      document.removeEventListener('fullscreenchange', onFullscreenChange)
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange)
       try { (screen.orientation as any)?.unlock?.() } catch {}
       try { if (document.fullscreenElement) document.exitFullscreen() } catch {}
     }
   }, [])
 
-  // Enter fullscreen on first tap (upgrades CSS hack to real fullscreen)
-  const enterFullscreen = useCallback(() => {
-    if (hasEnteredFullscreen.current) return
-    hasEnteredFullscreen.current = true
-
-    const el = document.querySelector('.player-root') as HTMLElement
-    if (!el) return
-
-    ;(async () => {
+  // Auto-enter fullscreen + lock landscape on mount
+  useEffect(() => {
+    const tryFullscreenLandscape = async () => {
+      const el = document.getElementById('player-root')
+      if (!el) return
       try {
         if (el.requestFullscreen) await el.requestFullscreen()
         else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen()
       } catch {}
       try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
-      document.documentElement.classList.remove('force-landscape')
-    })()
+    }
+    // Small delay to let the DOM settle
+    const timer = setTimeout(tryFullscreenLandscape, 300)
+    return () => clearTimeout(timer)
+  }, [ready])
 
+  // ── Go landscape (user tap) ────────────────────────────────────────────
+  const goLandscape = async () => {
+    const el = document.getElementById('player-root')
+    if (!el) return
+    try {
+      if (el.requestFullscreen) await el.requestFullscreen()
+      else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen()
+    } catch {}
+    try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
     videoRef.current?.play().catch(() => {})
-  }, [])
+  }
 
-  // ── Loading state ──────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────
   if (!ready || !src) {
     return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center z-[9999]">
-        <div className="w-12 h-12 border-3 border-white/20 border-t-[#e50914] rounded-full animate-spin" />
+      <div style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999,
+      }}>
+        <div style={{
+          width: 48, height: 48, border: '3px solid rgba(255,255,255,0.2)',
+          borderTopColor: '#e50914', borderRadius: '50%', animation: 'spin 0.8s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       </div>
     )
   }
 
   // ── Player ─────────────────────────────────────────────────────────────
+  const showRotatePrompt = !isLandscape && !isFullscreen
+
   return (
     <div
-      className="player-root fixed inset-0 bg-black z-[9999]"
-      onClick={enterFullscreen}
-      onTouchStart={enterFullscreen}
+      id="player-root"
+      style={{
+        position: 'fixed', top: 0, left: 0,
+        width: '100vw', height: '100vh',
+        background: '#000', zIndex: 9999,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
     >
+      {/* Video — always rendered, centered */}
       <video
         ref={videoRef}
         playsInline
         autoPlay
         controls
-        style={{ width: '100%', height: '100%', objectFit: fit, background: '#000' }}
+        style={{
+          width: '100%', height: '100%',
+          objectFit: fit,
+          background: '#000',
+          display: 'block',
+        }}
       />
 
-      {/* Fit toggle button */}
+      {/* Fit toggle */}
       <button
-        onClick={(e) => { e.stopPropagation(); setFit(f => f === 'cover' ? 'contain' : 'cover') }}
-        onTouchStart={(e) => e.stopPropagation()}
+        onClick={() => setFit(f => f === 'cover' ? 'contain' : 'cover')}
         style={{
-          position: 'absolute',
-          top: 12,
-          right: 12,
-          zIndex: 10000,
-          background: 'rgba(0,0,0,0.6)',
-          border: 'none',
-          borderRadius: 8,
-          padding: '6px 12px',
-          color: '#fff',
-          fontSize: 11,
-          fontWeight: 600,
-          cursor: 'pointer',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
+          position: 'absolute', top: 12, right: 12, zIndex: 10,
+          background: 'rgba(0,0,0,0.6)', border: 'none', borderRadius: 8,
+          padding: '6px 12px', color: '#fff', fontSize: 11, fontWeight: 600,
+          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
         }}
       >
         {fit === 'cover' ? '16:9' : 'Fill'}
       </button>
+
+      {/* Rotate prompt — shown only in portrait + not fullscreen */}
+      {showRotatePrompt && (
+        <div
+          style={{
+            position: 'absolute', inset: 0, zIndex: 20,
+            background: 'rgba(0,0,0,0.85)',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 16,
+          }}
+        >
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={1.5} style={{ opacity: 0.7 }}>
+            <path d="M17 1l4 4-4 4" />
+            <path d="M3 11V9a4 4 0 014-4h14" />
+            <path d="M7 23l-4-4 4-4" />
+            <path d="M21 13v2a4 4 0 01-4 4H3" />
+          </svg>
+          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: 14, textAlign: 'center' }}>
+            Rotate your device to landscape
+          </p>
+          <button
+            onClick={goLandscape}
+            style={{
+              background: '#e50914', color: '#fff', border: 'none',
+              borderRadius: 12, padding: '12px 32px', fontSize: 14, fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Enter Fullscreen
+          </button>
+        </div>
+      )}
     </div>
   )
 }

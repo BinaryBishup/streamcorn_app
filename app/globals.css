@@ -57,24 +57,10 @@ html, body {
   animation: slideDown 0.3s ease-out;
 }
 
-/* Force landscape for player when orientation lock API is unavailable */
-@media (orientation: portrait) {
-  html.force-landscape body {
-    transform: rotate(90deg);
-    transform-origin: left top;
-    width: 100vh;
-    height: 100vw;
-    overflow: hidden;
-    position: absolute;
-    top: 0;
-    left: 100%;
-  }
-}
-
-/* Hide fullscreen button from native video controls */
-.player-root video::-webkit-media-controls-fullscreen-button {
+/* Hide fullscreen button from native video controls (player handles it) */
+#player-root video::-webkit-media-controls-fullscreen-button {
   display: none !important;
 }
-.player-root video::-moz-fullscreen-button {
+#player-root video::-moz-fullscreen-button {
   display: none !important;
 }
