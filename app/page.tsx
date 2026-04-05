@@ -46,8 +46,17 @@ async function getHomeData() {
 
   const buildSections = (arr: [string, any[]][]) => arr.filter(([, items]) => items.length > 0).map(([title, items]) => ({ title, items }))
 
+  // Sports events
+  const { data: sports } = await supabase
+    .from('sports_events')
+    .select('*')
+    .eq('is_featured', true)
+    .order('match_date', { ascending: true })
+    .limit(10)
+
   return {
     hero: hero || [],
+    sports: sports || [],
     allSections: buildSections([
       ['Top Rated', topRated], ['Popular on Netflix', netflix], ['Popular on Prime Video', prime],
       ['Popular on Apple TV+', appletv], ['Popular on Crunchyroll', crunchyroll],
@@ -67,5 +76,5 @@ async function getHomeData() {
 
 export default async function HomePage() {
   const data = await getHomeData()
-  return <HomeContent hero={data.hero} allSections={data.allSections} movieSections={data.movieSections} showSections={data.showSections} />
+  return <HomeContent hero={data.hero} sports={data.sports} allSections={data.allSections} movieSections={data.movieSections} showSections={data.showSections} />
 }
