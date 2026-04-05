@@ -15,17 +15,20 @@ export default function AccountPage() {
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null)
   const [signingOut, setSigningOut] = useState(false)
   const [showInstallGuide, setShowInstallGuide] = useState(false)
+  const [loading, setLoading] = useState(true)
   const { canInstall, isInstalled, install } = usePWA()
 
   useEffect(() => {
-    fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d.user)).catch(() => {})
-    fetch('/api/auth/subscription').then(r => r.json()).then(d => setSub(d.subscription)).catch(() => {})
-    fetch('/api/profiles').then(r => r.json()).then(d => {
-      const profs = d.profiles || []
-      setProfiles(profs)
-      const savedId = localStorage.getItem('streamcorn_profile_id')
-      setActiveProfile(profs.find((p: Profile) => p.id === savedId) || profs[0] || null)
-    }).catch(() => {})
+    Promise.all([
+      fetch('/api/auth/me').then(r => r.json()).then(d => setUser(d.user)).catch(() => {}),
+      fetch('/api/auth/subscription').then(r => r.json()).then(d => setSub(d.subscription)).catch(() => {}),
+      fetch('/api/profiles').then(r => r.json()).then(d => {
+        const profs = d.profiles || []
+        setProfiles(profs)
+        const savedId = localStorage.getItem('streamcorn_profile_id')
+        setActiveProfile(profs.find((p: Profile) => p.id === savedId) || profs[0] || null)
+      }).catch(() => {}),
+    ]).finally(() => setLoading(false))
   }, [])
 
   const switchProfile = (p: Profile) => {
@@ -38,6 +41,48 @@ export default function AccountPage() {
   const handleSignOut = async () => {
     setSigningOut(true)
     await signOut()
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black px-4 pt-4 pb-8">
+        {/* Avatar skeleton */}
+        <div className="flex flex-col items-center pt-4 mb-6">
+          <div className="w-20 h-20 rounded-2xl bg-[#1a1a1a] animate-pulse mb-3" />
+          <div className="h-5 w-28 bg-[#1a1a1a] rounded-lg animate-pulse mb-1" />
+          <div className="h-3 w-20 bg-[#1a1a1a] rounded animate-pulse" />
+        </div>
+        {/* Profile switcher skeleton */}
+        <div className="bg-[#111] rounded-2xl p-4 mb-3">
+          <div className="h-4 w-24 bg-[#1a1a1a] rounded animate-pulse mb-3" />
+          <div className="flex gap-3">
+            {[1,2].map(i => <div key={i} className="w-14 h-14 rounded-xl bg-[#1a1a1a] animate-pulse" />)}
+          </div>
+        </div>
+        {/* Subscription skeleton */}
+        <div className="bg-[#111] rounded-2xl p-4 mb-3">
+          <div className="h-4 w-20 bg-[#1a1a1a] rounded animate-pulse mb-3" />
+          <div className="h-5 w-36 bg-[#1a1a1a] rounded animate-pulse mb-2" />
+          <div className="h-3 w-28 bg-[#1a1a1a] rounded animate-pulse mb-3" />
+          <div className="h-10 bg-[#1a1a1a] rounded-xl animate-pulse" />
+        </div>
+        {/* Account info skeleton */}
+        <div className="bg-[#111] rounded-2xl p-4 mb-3 space-y-3">
+          <div className="h-4 w-24 bg-[#1a1a1a] rounded animate-pulse" />
+          {[1,2,3].map(i => (
+            <div key={i} className="flex justify-between">
+              <div className="h-3 w-16 bg-[#1a1a1a] rounded animate-pulse" />
+              <div className="h-3 w-24 bg-[#1a1a1a] rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+        {/* Links skeleton */}
+        <div className="bg-[#111] rounded-2xl p-4 mb-3">
+          <div className="h-4 w-32 bg-[#1a1a1a] rounded animate-pulse mb-3" />
+          <div className="h-4 w-24 bg-[#1a1a1a] rounded animate-pulse" />
+        </div>
+      </div>
+    )
   }
 
   const isSubscribed = sub && sub.status === 'active'

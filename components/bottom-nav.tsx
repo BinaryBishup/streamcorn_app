@@ -30,7 +30,7 @@ export function BottomNav() {
     { href: '/', label: 'Home', type: 'icon' as const, icon: '/icons/home.svg' },
     { href: '/browse', label: 'Browse', type: 'icon' as const, icon: '/icons/browse.svg' },
     { href: '/request', label: 'Request', type: 'request' as const },
-    { href: '/mylist', label: 'My List', type: 'bookmark' as const },
+    { href: '/mylist', label: 'Watchlist', type: 'bookmark' as const },
     { href: '/account', label: 'Account', type: 'profile' as const },
   ]
 
