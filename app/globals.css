@@ -57,53 +57,24 @@ html, body {
   animation: slideDown 0.3s ease-out;
 }
 
-/* Hide fullscreen button from native video controls (player handles it) */
-#player-root video::-webkit-media-controls-fullscreen-button {
+/* Player: show only the native seekbar/timeline, hide all other native controls */
+#player-root video::-webkit-media-controls-play-button,
+#player-root video::-webkit-media-controls-mute-button,
+#player-root video::-webkit-media-controls-volume-slider,
+#player-root video::-webkit-media-controls-fullscreen-button,
+#player-root video::-webkit-media-controls-current-time-display,
+#player-root video::-webkit-media-controls-time-remaining-display,
+#player-root video::-webkit-media-controls-toggle-closed-captions-button,
+#player-root video::-webkit-media-controls-overflow-button {
   display: none !important;
+}
+#player-root video::-webkit-media-controls-panel {
+  background: transparent !important;
+  padding: 0 !important;
+}
+#player-root video::-webkit-media-controls-timeline {
+  padding: 0 8px !important;
 }
 #player-root video::-moz-fullscreen-button {
   display: none !important;
-}
-
-/* Native range seekbar styled red */
-.player-seekbar {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  outline: none;
-}
-.player-seekbar::-webkit-slider-runnable-track {
-  height: 4px;
-  background: rgba(255,255,255,0.2);
-  border-radius: 9999px;
-}
-.player-seekbar::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #e50914;
-  border: none;
-  margin-top: -5px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-}
-.player-seekbar::-moz-range-track {
-  height: 4px;
-  background: rgba(255,255,255,0.2);
-  border-radius: 9999px;
-  border: none;
-}
-.player-seekbar::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #e50914;
-  border: none;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.5);
-}
-.player-seekbar::-moz-range-progress {
-  height: 4px;
-  background: #e50914;
-  border-radius: 9999px;
 }

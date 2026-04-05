@@ -174,15 +174,6 @@ export default function WatchPage() {
   const handleNextEp = () => { const idx = episodes.findIndex(ep => ep.episode_number === episode); if (idx < episodes.length - 1) router.push(`/watch/tv/${id}?s=${season}&e=${episodes[idx + 1].episode_number}`) }
   const setAudioTrack = (trackId: number) => { if (hlsRef.current) hlsRef.current.audioTrack = trackId; setShowAudioSheet(false) }
 
-  // Seekbar via native range input (reliable drag on all mobile browsers)
-  const onSeekInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const v = videoRef.current; if (!v || !v.duration) return
-    const newTime = (parseFloat(e.target.value) / 100) * v.duration
-    v.currentTime = newTime
-    setCt(newTime)
-  }
-  const onSeekStart = () => { setIsScrubbing(true) }
-  const onSeekEnd = () => { setIsScrubbing(false); resetTimer() }
 
   const progress = dur > 0 ? (ct / dur) * 100 : 0
   const stopProp = (e: React.TouchEvent | React.MouseEvent) => e.stopPropagation()
@@ -199,7 +190,7 @@ export default function WatchPage() {
 
   return (
     <div id="player-root" style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999 }} onTouchEnd={handleVideoAreaTap}>
-      <video ref={videoRef} playsInline autoPlay style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: '#000' }} />
+      <video ref={videoRef} playsInline autoPlay controls style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: '#000' }} />
 
       {loading && <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', zIndex: 5 }}><div style={{ width: 48, height: 48, border: '3px solid rgba(255,255,255,0.2)', borderTopColor: '#e50914', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /></div>}
 
@@ -228,24 +219,10 @@ export default function WatchPage() {
 
           {/* Bottom */}
           <div onTouchEnd={stopProp} style={{ padding: '0 16px 12px', background: 'linear-gradient(to top, rgba(0,0,0,0.7), transparent)' }}>
-            {/* Seekbar — native range input for reliable mobile drag */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontVariantNumeric: 'tabular-nums', width: 44 }}>{fmtTime(ct)}</span>
-              <input
-                type="range"
-                min={0}
-                max={100}
-                step={0.1}
-                value={progress}
-                onChange={onSeekInput}
-                onTouchStart={onSeekStart}
-                onTouchEnd={onSeekEnd}
-                onMouseDown={onSeekStart}
-                onMouseUp={onSeekEnd}
-                className="player-seekbar"
-                style={{ flex: 1, height: 36, margin: 0, padding: 0, background: 'transparent', cursor: 'pointer' }}
-              />
-              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, fontVariantNumeric: 'tabular-nums', width: 48, textAlign: 'right' }}>-{fmtTime(Math.max(0, dur - ct))}</span>
+            {/* Time display only — seekbar is native video controls below */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{fmtTime(ct)}</span>
+              <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>-{fmtTime(Math.max(0, dur - ct))}</span>
             </div>
 
             {/* Action row — equidistant, white icons, Google Material style */}
