@@ -87,8 +87,21 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
     router.push(`/detail/${item.type}/${item.tmdb_id}`)
   }
 
-  // My List toggle
-  const [addedToList, setAddedToList] = useState(false)
+  // My List — check all items on load
+  const [watchlistSet, setWatchlistSet] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    const pid = localStorage.getItem('streamcorn_profile_id')
+    if (!pid) return
+    fetch(`/api/watchlist?profile_id=${pid}`)
+      .then(r => r.json())
+      .then(d => {
+        const set = new Set<string>()
+        ;(d.items || []).forEach((i: any) => set.add(`${i.type}-${i.tmdb_id}`))
+        setWatchlistSet(set)
+      }).catch(() => {})
+  }, [])
+
+  const addedToList = watchlistSet.has(`${item.type}-${item.tmdb_id}`)
   const toggleMyList = useCallback(async () => {
     const pid = localStorage.getItem('streamcorn_profile_id')
     if (!pid) return
@@ -99,7 +112,12 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
         body: JSON.stringify({ profile_id: pid, tmdb_id: item.tmdb_id, type: item.type }),
       })
       const data = await res.json()
-      setAddedToList(data.added)
+      setWatchlistSet(prev => {
+        const next = new Set(prev)
+        const key = `${item.type}-${item.tmdb_id}`
+        if (data.added) next.add(key); else next.delete(key)
+        return next
+      })
     } catch {}
   }, [item.tmdb_id, item.type])
 
