@@ -14,6 +14,7 @@ export default function AccountPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null)
   const [signingOut, setSigningOut] = useState(false)
+  const [showInstallGuide, setShowInstallGuide] = useState(false)
   const { canInstall, isInstalled, install } = usePWA()
 
   useEffect(() => {
@@ -156,10 +157,25 @@ export default function AccountPage() {
         </Link>
       </div>
 
-      {/* Install app */}
-      {canInstall && !isInstalled && (
+      {/* Install app — always show */}
+      {isInstalled ? (
+        <div className="w-full py-3 bg-[#111] rounded-2xl text-center mb-3">
+          <span className="text-green-400 text-sm font-medium flex items-center justify-center gap-2">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+            App Installed
+          </span>
+        </div>
+      ) : (
         <button
-          onClick={install}
+          onClick={() => {
+            if (canInstall) {
+              install()
+            } else {
+              setShowInstallGuide(true)
+            }
+          }}
           className="w-full py-3.5 bg-[#e50914] rounded-2xl text-white text-sm font-bold active:bg-[#b20710] mb-3 flex items-center justify-center gap-2"
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -170,14 +186,21 @@ export default function AccountPage() {
           Install App
         </button>
       )}
-      {isInstalled && (
-        <div className="w-full py-3 bg-[#111] rounded-2xl text-center mb-3">
-          <span className="text-green-400 text-sm font-medium flex items-center justify-center gap-2">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M20 6L9 17l-5-5" />
-            </svg>
-            App Installed
-          </span>
+
+      {/* Install guide for browsers without beforeinstallprompt (iOS Safari etc) */}
+      {showInstallGuide && (
+        <div className="fixed inset-0 z-[200] bg-black/80 flex items-end justify-center" onClick={() => setShowInstallGuide(false)}>
+          <div className="bg-[#1a1a1a] rounded-t-2xl p-6 w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white text-base font-bold mb-4">Install Streamcorn</h3>
+            <div className="space-y-3 text-sm text-white/70">
+              <p><span className="text-white font-medium">Chrome (Android):</span> Tap the menu (3 dots) → "Add to Home screen"</p>
+              <p><span className="text-white font-medium">Safari (iOS):</span> Tap the share button → "Add to Home Screen"</p>
+              <p><span className="text-white font-medium">Samsung Internet:</span> Tap the menu → "Add page to" → "Home screen"</p>
+            </div>
+            <button onClick={() => setShowInstallGuide(false)} className="w-full mt-5 py-3 bg-white/10 rounded-xl text-white text-sm font-semibold active:bg-white/15">
+              Got it
+            </button>
+          </div>
         </div>
       )}
 
