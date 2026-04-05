@@ -57,3 +57,11 @@ html, body {
   animation: slideDown 0.3s ease-out;
 }
 
+/* Hide unwanted native video control buttons */
+#player-root video::-webkit-media-controls-fullscreen-button,
+#player-root video::-webkit-media-controls-overflow-button,
+#player-root video::-webkit-media-controls-mute-button,
+#player-root video::-webkit-media-controls-volume-slider {
+  display: none !important;
+}
+
