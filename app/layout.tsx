@@ -6,6 +6,7 @@ import { SessionGate } from "@/components/session-gate";
 import { SubscriptionGate } from "@/components/subscription-gate";
 import { PWAProvider } from "@/components/pwa-provider";
 import { SecurityGuard } from "@/components/security-guard";
+import { BrowserGate } from "@/components/browser-gate";
 import "./globals.css";
 
 const inter = Inter({
@@ -47,15 +48,17 @@ export default function RootLayout({
       <body className="font-sans antialiased bg-black text-white min-h-screen" style={{ backgroundColor: '#000' }}>
         <SecurityGuard />
         <PWAProvider>
-          <Header />
-          <SubscriptionGate>
-            <SessionGate>
-              <main className="pb-[72px]">
-                {children}
-              </main>
-            </SessionGate>
-          </SubscriptionGate>
-          <BottomNav />
+          <BrowserGate>
+            <Header />
+            <SubscriptionGate>
+              <SessionGate>
+                <main className="pb-[72px]">
+                  {children}
+                </main>
+              </SessionGate>
+            </SubscriptionGate>
+            <BottomNav />
+          </BrowserGate>
         </PWAProvider>
       </body>
     </html>

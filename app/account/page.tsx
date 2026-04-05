@@ -238,38 +238,6 @@ export default function AccountPage() {
         </div>
       )}
 
-      {/* Install instructions — only shown on browser, not in PWA */}
-      {!isInstalled && (
-        <div className="bg-[#111] rounded-2xl p-4 mb-3">
-          <div className="flex items-center gap-2 mb-3">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e50914" strokeWidth={2}>
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            <h2 className="text-sm font-semibold text-white">Install App</h2>
-          </div>
-          {canInstall ? (
-            <button onClick={install} className="w-full py-2.5 bg-[#e50914] text-white text-sm font-bold rounded-xl active:bg-[#b20710]">
-              Install Now
-            </button>
-          ) : typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent) ? (
-            <div className="space-y-2 text-sm text-white/60">
-              <p>1. Tap the <span className="text-white font-medium">⋮ menu</span> (top right)</p>
-              <p>2. Tap <span className="text-white font-medium">"Install app"</span></p>
-            </div>
-          ) : typeof navigator !== 'undefined' && /iphone|ipad/i.test(navigator.userAgent) ? (
-            <div className="space-y-2 text-sm text-white/60">
-              <p>1. Open in <span className="text-white font-medium">Safari</span></p>
-              <p>2. Tap <span className="text-white font-medium">Share</span> → <span className="text-white font-medium">"Add to Home Screen"</span></p>
-            </div>
-          ) : (
-            <div className="space-y-2 text-sm text-white/60">
-              <p>Click the <span className="text-white font-medium">install icon</span> in the address bar</p>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Sign out */}
       <button
