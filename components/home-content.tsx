@@ -1,7 +1,6 @@
 'use client'
 
 import { useState } from 'react'
-import Link from 'next/link'
 import { HeroBanner } from './hero-banner'
 import { ContentRow } from './content-row'
 import { ContinueWatching } from './continue-watching'
@@ -40,13 +39,6 @@ export function HomeContent({ hero, allSections, movieSections, showSections }: 
             {t === 'all' ? 'All' : t === 'movies' ? 'Movies' : 'Web Shows'}
           </button>
         ))}
-      </div>
-
-      {/* Test player button */}
-      <div className="px-4 pb-3">
-        <Link href="/test-player" className="block w-full py-2.5 bg-[#e50914] text-white text-sm font-bold rounded-xl text-center active:bg-[#b20710]">
-          Test Player
-        </Link>
       </div>
 
       <ContinueWatching />
