@@ -80,18 +80,7 @@ export default function WatchPage() {
     return () => { cancelled = true }
   }, [id, type, season, episode, tmdbId, mediaType, seasonNum, episodeNum])
 
-  // ── Save helpers ───────────────────────────────────────────────────────
-  const doSave = useCallback(() => {
-    const v = videoRef.current
-    const pid = profileIdRef.current
-    if (!v || !pid) return
-    const d = v.duration || 0
-    const c = v.currentTime || 0
-    if (!isFinite(d) || d < 10 || c < 5) return
-    lastSaveTs.current = Date.now()
-    saveProgress(buildPayload(pid, tmdbId, mediaType, c, d, seasonNum, episodeNum))
-  }, [tmdbId, mediaType, seasonNum, episodeNum])
-
+  // ── Beacon save for page leave ───────────────────────────────────────
   const doBeacon = useCallback(() => {
     const v = videoRef.current
     const pid = profileIdRef.current
@@ -129,6 +118,26 @@ export default function WatchPage() {
       v.play().catch(() => {})
     }
 
+    // Progress save listeners — attached here so we know `v` exists
+    const onPause = () => {
+      const pid = profileIdRef.current
+      if (!pid || !isFinite(v.duration) || v.duration < 10 || v.currentTime < 5) return
+      saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum))
+    }
+    const onSeeked = () => onPause()
+    const onTimeUpdate = () => {
+      const now = Date.now()
+      if (now - lastSaveTs.current >= 10_000 && v.currentTime > 5 && v.duration > 10) {
+        lastSaveTs.current = now
+        const pid = profileIdRef.current
+        if (pid) saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum))
+      }
+    }
+
+    v.addEventListener('pause', onPause)
+    v.addEventListener('seeked', onSeeked)
+    v.addEventListener('timeupdate', onTimeUpdate)
+
     if (Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true })
       hls.loadSource(src)
@@ -147,35 +156,12 @@ export default function WatchPage() {
     }
 
     return () => {
-      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
-    }
-  }, [src])
-
-  // ── Video event listeners (progress save, etc) ─────────────────────────
-  useEffect(() => {
-    const v = videoRef.current
-    if (!v) return
-
-    const onPause = () => doSave()
-    const onSeeked = () => doSave()
-    const onTimeUpdate = () => {
-      const now = Date.now()
-      if (now - lastSaveTs.current >= 10_000 && v.currentTime > 5 && v.duration > 10) {
-        lastSaveTs.current = now
-        doSave()
-      }
-    }
-
-    v.addEventListener('pause', onPause)
-    v.addEventListener('seeked', onSeeked)
-    v.addEventListener('timeupdate', onTimeUpdate)
-
-    return () => {
       v.removeEventListener('pause', onPause)
       v.removeEventListener('seeked', onSeeked)
       v.removeEventListener('timeupdate', onTimeUpdate)
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     }
-  }, [doSave])
+  }, [src, tmdbId, mediaType, seasonNum, episodeNum])
 
   // ── Force landscape on load ─────────────────────────────────────────────
   useEffect(() => {
