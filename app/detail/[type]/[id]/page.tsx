@@ -101,9 +101,8 @@ export default function DetailPage() {
       <div className="relative aspect-video bg-black">
         {details.trailerKey ? (
           <iframe
-            src={`https://www.youtube.com/embed/${details.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&loop=1&playlist=${details.trailerKey}&modestbranding=1`}
+            src={`https://www.youtube.com/embed/${details.trailerKey}?autoplay=1&controls=0&showinfo=0&rel=0&loop=1&playlist=${details.trailerKey}&modestbranding=1`}
             className="w-full h-full" allow="autoplay; encrypted-media" frameBorder="0"
-            style={{ pointerEvents: 'none' }}
           />
         ) : details.backdropPath ? (
           <img src={details.backdropPath} alt="" className="w-full h-full object-cover" />

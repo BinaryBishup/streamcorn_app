@@ -22,6 +22,7 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
   const [logos, setLogos] = useState<Record<string, string | null>>({})
   const [genres, setGenres] = useState<Record<string, string[]>>({})
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const touchStartX = useRef(0)
 
   useEffect(() => {
     if (items.length <= 1) return
@@ -62,10 +63,27 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
   const logoUrl = logos[key]
   const genreList = genres[key] || []
 
+  const handleSwipeStart = (e: React.TouchEvent) => { touchStartX.current = e.touches[0].clientX }
+  const handleSwipeEnd = (e: React.TouchEvent) => {
+    const diff = touchStartX.current - e.changedTouches[0].clientX
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) setActive(prev => (prev + 1) % items.length)
+      else setActive(prev => (prev - 1 + items.length) % items.length)
+      // Reset auto-rotate timer
+      if (timerRef.current) clearInterval(timerRef.current)
+      timerRef.current = setInterval(() => setActive(prev => (prev + 1) % items.length), 6000)
+    }
+  }
+
   return (
-    <div className="relative w-full px-4 pt-12 pb-2">
+    <div
+      className="relative w-full px-4 pt-12 pb-2"
+      style={{ background: 'linear-gradient(180deg, #0d0015 0%, #0a0010 40%, #000 100%)' }}
+      onTouchStart={handleSwipeStart}
+      onTouchEnd={handleSwipeEnd}
+    >
       {/* Poster card */}
-      <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl shadow-black/60" style={{ aspectRatio: '2/3', maxHeight: '70vh' }}>
+      <div className="relative w-full rounded-2xl overflow-hidden shadow-2xl shadow-purple-900/30" style={{ aspectRatio: '2/3', maxHeight: '70vh', border: '1px solid rgba(255,255,255,0.12)' }}>
         {poster && (
           <img
             key={active}

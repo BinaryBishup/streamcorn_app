@@ -112,23 +112,23 @@ export function SportsSection({ events }: { events: SportsEvent[] }) {
 
                   {/* Action buttons */}
                   <div className="px-3 pb-3 flex gap-2">
-                    {isLive && match.stream_url && (
-                      <a href={match.stream_url} className="flex-1 flex items-center justify-center gap-1.5 bg-red-600 text-white text-xs font-bold py-2 rounded-lg active:bg-red-700">
+                    {isLive && (
+                      <a href={`/sports/${match.id}`} className="flex-1 flex items-center justify-center gap-1.5 bg-red-600 text-white text-xs font-bold py-2 rounded-lg active:bg-red-700">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
                         Watch Live
                       </a>
                     )}
-                    {isCompleted && match.highlight_url && (
-                      <a href={match.highlight_url} className="flex-1 flex items-center justify-center gap-1.5 bg-white/10 text-white text-xs font-semibold py-2 rounded-lg active:bg-white/15">
+                    {isCompleted && (
+                      <a href={`/sports/${match.id}`} className="flex-1 flex items-center justify-center gap-1.5 bg-white/10 text-white text-xs font-semibold py-2 rounded-lg active:bg-white/15">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="white"><path d="M8 5v14l11-7z" /></svg>
                         Highlights
                       </a>
                     )}
                     {!isLive && !isCompleted && (
-                      <div className="flex-1 flex items-center justify-center gap-1.5 bg-white/[0.06] text-white/40 text-xs py-2 rounded-lg">
+                      <a href={`/sports/${match.id}`} className="flex-1 flex items-center justify-center gap-1.5 bg-white/[0.06] text-white/40 text-xs py-2 rounded-lg">
                         <svg width="14" height="14" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-80q-33 0-56.5-23.5T120-160v-560q0-33 23.5-56.5T200-800h40v-80h80v80h320v-80h80v80h40q33 0 56.5 23.5T840-720v560q0 33-23.5 56.5T760-80H200Zm0-80h560v-400H200v400Z" /></svg>
                         Upcoming
-                      </div>
+                      </a>
                     )}
                   </div>
                 </div>
