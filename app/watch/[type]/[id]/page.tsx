@@ -201,12 +201,24 @@ export default function WatchPage() {
   const resetTimer = useCallback(() => {
     if (controlsTimer.current) clearTimeout(controlsTimer.current)
     setShowControls(true)
-    controlsTimer.current = setTimeout(() => setShowControls(false), 4000)
-  }, [])
+    controlsTimer.current = setTimeout(() => { if (!isScrubbing) setShowControls(false) }, 4000)
+  }, [isScrubbing])
 
-  // ── Tap handling: single = toggle controls, double = seek ──────────────
-  const handleTap = (e: React.TouchEvent) => {
+  // Keep controls visible while scrubbing
+  useEffect(() => {
+    if (isScrubbing) {
+      if (controlsTimer.current) clearTimeout(controlsTimer.current)
+      setShowControls(true)
+    }
+  }, [isScrubbing])
+
+  // ── Tap handling on VIDEO AREA only (not controls) ─────────────────────
+  const handleVideoAreaTap = (e: React.TouchEvent) => {
+    // Only handle taps on the video/player-root itself, not on controls
+    const target = e.target as HTMLElement
+    if (target.closest('[data-controls]')) return
     if (locked) return
+
     const clientX = e.changedTouches[0].clientX
     const halfW = window.innerWidth / 2
     tapCount.current++
@@ -241,21 +253,40 @@ export default function WatchPage() {
   // ── Scrubber ───────────────────────────────────────────────────────────
   const scrubTo = useCallback((clientX: number) => {
     const bar = scrubberRef.current; const v = videoRef.current
-    if (!bar || !v) return
+    if (!bar || !v || !v.duration) return
     const rect = bar.getBoundingClientRect()
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    v.currentTime = ratio * (v.duration || 0)
-    setCt(v.currentTime)
+    const newTime = ratio * v.duration
+    v.currentTime = newTime
+    setCt(newTime)
   }, [])
-  const onScrubStart = (e: React.TouchEvent) => { e.stopPropagation(); e.preventDefault(); setIsScrubbing(true); if (controlsTimer.current) clearTimeout(controlsTimer.current); scrubTo(e.touches[0].clientX) }
-  const onScrubMove = (e: React.TouchEvent) => { e.stopPropagation(); e.preventDefault(); scrubTo(e.touches[0].clientX) }
-  const onScrubEnd = (e: React.TouchEvent) => { e.stopPropagation(); e.preventDefault(); setIsScrubbing(false); resetTimer() }
+
+  const onScrubStart = (e: React.TouchEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsScrubbing(true)
+    scrubTo(e.touches[0].clientX)
+  }
+  const onScrubMove = (e: React.TouchEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    scrubTo(e.touches[0].clientX)
+  }
+  const onScrubEnd = (e: React.TouchEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    setIsScrubbing(false)
+    resetTimer()
+  }
   const onScrubMouse = (e: React.MouseEvent) => {
-    e.stopPropagation(); e.preventDefault(); setIsScrubbing(true)
-    if (controlsTimer.current) clearTimeout(controlsTimer.current); scrubTo(e.clientX)
+    e.stopPropagation()
+    e.preventDefault()
+    setIsScrubbing(true)
+    scrubTo(e.clientX)
     const onMove = (ev: MouseEvent) => { ev.preventDefault(); scrubTo(ev.clientX) }
     const onUp = () => { setIsScrubbing(false); resetTimer(); document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
-    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
   }
 
   const stopProp = (e: React.TouchEvent | React.MouseEvent) => e.stopPropagation()
@@ -274,7 +305,7 @@ export default function WatchPage() {
   const showRotatePrompt = !isLandscape && !isFullscreen
 
   return (
-    <div id="player-root" style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999 }} onTouchEnd={handleTap}>
+    <div id="player-root" style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999 }} onTouchEnd={handleVideoAreaTap}>
       {/* Video */}
       <video ref={videoRef} playsInline autoPlay style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: '#000' }} />
 
@@ -299,7 +330,7 @@ export default function WatchPage() {
 
       {/* Controls overlay */}
       {!locked && (
-        <div style={{
+        <div data-controls style={{
           position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
           opacity: showControls && !loading ? 1 : 0, pointerEvents: showControls && !loading ? 'auto' : 'none',
           transition: 'opacity 0.25s ease',
@@ -343,7 +374,7 @@ export default function WatchPage() {
             {/* Scrubber */}
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, fontVariantNumeric: 'tabular-nums', width: 48 }}>{fmtTime(ct)}</span>
-              <div ref={scrubberRef} style={{ flex: 1, padding: '12px 0', touchAction: 'none', cursor: 'pointer' }}
+              <div ref={scrubberRef} style={{ flex: 1, padding: '20px 0', touchAction: 'none', cursor: 'pointer', userSelect: 'none', WebkitUserSelect: 'none' }}
                 onTouchStart={onScrubStart} onTouchMove={onScrubMove} onTouchEnd={onScrubEnd} onMouseDown={onScrubMouse}>
                 <div style={{ width: '100%', height: isScrubbing ? 6 : 3, background: 'rgba(255,255,255,0.2)', borderRadius: 9999, position: 'relative', transition: 'height 0.15s' }}>
                   <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${buffered}%`, background: 'rgba(255,255,255,0.15)', borderRadius: 9999 }} />
