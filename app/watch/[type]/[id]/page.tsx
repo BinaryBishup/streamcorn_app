@@ -77,19 +77,23 @@ export default function WatchPage() {
       setSrc(srcRes.url || null)
       setTitle(detailRes.title || detailRes.name || '')
       resumeRef.current = resume
+      setReady(true) // Set ready immediately so video element renders
 
       if (type === 'tv') {
         setEpTitle(`S${season}:E${episode}`)
         const filteredSeasons = (detailRes.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => ({ season_number: s.season_number, name: s.name }))
         setSeasons(filteredSeasons)
         setSheetSeason(season)
-        const sRes = await fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${TMDB_KEY}`).then(r => r.json())
-        if (cancelled) return
-        const eps = (sRes.episodes || []).map((e: any) => ({ id: e.id, episode_number: e.episode_number, name: e.name, still_path: e.still_path, runtime: e.runtime }))
-        setEpisodes(eps); setSheetEpisodes(eps)
-        setHasNext(eps.findIndex((e: Episode) => e.episode_number === episode) < eps.length - 1)
+        // Fetch episodes without blocking playback
+        fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${TMDB_KEY}`)
+          .then(r => r.json())
+          .then(d => {
+            if (cancelled) return
+            const eps = (d.episodes || []).map((e: any) => ({ id: e.id, episode_number: e.episode_number, name: e.name, still_path: e.still_path, runtime: e.runtime }))
+            setEpisodes(eps); setSheetEpisodes(eps)
+            setHasNext(eps.findIndex((e: Episode) => e.episode_number === episode) < eps.length - 1)
+          }).catch(() => {})
       }
-      setReady(true)
     }
     load()
     return () => { cancelled = true }
