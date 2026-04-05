@@ -112,9 +112,11 @@ export default function AccountPage() {
         ) : (
           <p className="text-white/40 text-sm">No active plan</p>
         )}
-        <Link href="/subscribe" className="mt-3 block text-center bg-[#e50914] text-white py-2.5 rounded-xl text-sm font-bold active:bg-[#b20710]">
-          {isSubscribed ? 'Upgrade Plan' : 'Subscribe'}
-        </Link>
+        {(!isSubscribed || (sub && sub.max_devices < 4)) && (
+          <Link href="/subscribe" className="mt-3 block text-center bg-[#e50914] text-white py-2.5 rounded-xl text-sm font-bold active:bg-[#b20710]">
+            {isSubscribed ? 'Upgrade Plan' : 'Subscribe'}
+          </Link>
+        )}
       </div>
 
       {/* Account info */}

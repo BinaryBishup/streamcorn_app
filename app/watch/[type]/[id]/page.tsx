@@ -62,7 +62,14 @@ export default function WatchPage() {
         pid ? getResumePosition(pid, tmdbId, mediaType, seasonNum, episodeNum) : null,
       ])
       if (cancelled) return
-      setSrc(srcRes.url || null); setTitle(detailRes.title || detailRes.name || ''); resumeRef.current = resume; metadataRef.current = srcRes.metadata || null; setReady(true)
+      // Append content params to stream URL for per-content key lookup
+      let streamUrl = srcRes.url || null
+      if (streamUrl) {
+        const sep = streamUrl.includes('?') ? '&' : '?'
+        const keyParams = `tmdb_id=${tmdbId}&type=${type}${type === 'tv' ? `&season_number=${season}&episode_number=${episode}` : ''}`
+        streamUrl = `${streamUrl}${sep}${keyParams}`
+      }
+      setSrc(streamUrl); setTitle(detailRes.title || detailRes.name || ''); resumeRef.current = resume; metadataRef.current = srcRes.metadata || null; setReady(true)
       if (type === 'tv') {
         setEpTitle(`S${season}:E${episode}`)
         setSeasons((detailRes.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => ({ season_number: s.season_number, name: s.name }))); setSheetSeason(season)

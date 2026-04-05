@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { prefetchVideo } from '@/lib/prefetch-video'
 
+const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
+
 interface HeroItem {
   tmdb_id: number
   type: 'movie' | 'tv'
@@ -17,6 +19,7 @@ interface HeroItem {
 
 export function HeroBanner({ items }: { items: HeroItem[] }) {
   const [active, setActive] = useState(0)
+  const [logos, setLogos] = useState<Record<string, string | null>>({})
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
@@ -27,6 +30,21 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [items.length])
 
+  // Fetch logos for all hero items
+  useEffect(() => {
+    items.forEach(item => {
+      const key = `${item.type}-${item.tmdb_id}`
+      if (logos[key] !== undefined) return
+      fetch(`https://api.themoviedb.org/3/${item.type}/${item.tmdb_id}/images?api_key=${TMDB_KEY}`)
+        .then(r => r.json())
+        .then(d => {
+          const logo = (d.logos || []).find((l: any) => l.iso_639_1 === 'en') || (d.logos || [])[0]
+          setLogos(prev => ({ ...prev, [key]: logo ? `https://image.tmdb.org/t/p/w300${logo.file_path}` : null }))
+        })
+        .catch(() => setLogos(prev => ({ ...prev, [key]: null })))
+    })
+  }, [items])
+
   if (items.length === 0) return null
   const item = items[active]
   const image = item.poster_path
@@ -34,6 +52,7 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
     : item.backdrop_path
       ? `https://image.tmdb.org/t/p/w780${item.backdrop_path}`
       : null
+  const logoUrl = logos[`${item.type}-${item.tmdb_id}`]
 
   return (
     <div className="relative w-full" style={{ height: '60vh' }}>
@@ -45,12 +64,15 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
           className="absolute inset-0 w-full h-full object-cover animate-in fade-in duration-500"
         />
       )}
-      {/* Gradient overlays */}
       <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/40" />
 
-      {/* Content at bottom */}
       <div className="absolute bottom-0 left-0 right-0 p-4 pb-5">
-        <h1 className="text-2xl font-bold text-white mb-1 line-clamp-2 drop-shadow-lg">{item.title}</h1>
+        {/* Logo or fallback title */}
+        {logoUrl ? (
+          <img src={logoUrl} alt={item.title} className="h-12 max-w-[200px] object-contain mb-2 drop-shadow-lg" />
+        ) : (
+          <h1 className="text-2xl font-bold text-white mb-1 line-clamp-2 drop-shadow-lg">{item.title}</h1>
+        )}
         <div className="flex items-center gap-2 text-xs text-white/60 mb-3">
           <span className="text-[#46d369] font-semibold">{Math.round(item.rating * 10)}% Match</span>
           {item.year && <span>{item.year}</span>}
@@ -79,7 +101,6 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
         </div>
       </div>
 
-      {/* Dots */}
       {items.length > 1 && (
         <div className="absolute bottom-2 right-4 flex gap-1.5">
           {items.map((_, i) => (

@@ -41,6 +41,17 @@ export default function DetailPage() {
   const [loadingEps, setLoadingEps] = useState(false)
   const [expanded, setExpanded] = useState(false)
   const [progress, setProgress] = useState<WatchProgressRow | null>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Fetch logo
+    fetch(`https://api.themoviedb.org/3/${type}/${id}/images?api_key=${TMDB_KEY}`)
+      .then(r => r.json())
+      .then(d => {
+        const logo = (d.logos || []).find((l: any) => l.iso_639_1 === 'en') || (d.logos || [])[0]
+        if (logo) setLogoUrl(`https://image.tmdb.org/t/p/w300${logo.file_path}`)
+      }).catch(() => {})
+  }, [type, id])
 
   useEffect(() => {
     async function load() {
@@ -90,8 +101,9 @@ export default function DetailPage() {
       <div className="relative aspect-video bg-black">
         {details.trailerKey ? (
           <iframe
-            src={`https://www.youtube.com/embed/${details.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&loop=1&playlist=${details.trailerKey}`}
-            className="w-full h-full" allow="autoplay" frameBorder="0"
+            src={`https://www.youtube.com/embed/${details.trailerKey}?autoplay=1&mute=1&controls=0&showinfo=0&rel=0&loop=1&playlist=${details.trailerKey}&modestbranding=1`}
+            className="w-full h-full" allow="autoplay; encrypted-media" frameBorder="0"
+            style={{ pointerEvents: 'none' }}
           />
         ) : details.backdropPath ? (
           <img src={details.backdropPath} alt="" className="w-full h-full object-cover" />
@@ -103,7 +115,11 @@ export default function DetailPage() {
       </div>
 
       <div className="px-4 -mt-6 relative z-10">
-        <h1 className="text-2xl font-bold text-white mb-2">{details.title}</h1>
+        {logoUrl ? (
+          <img src={logoUrl} alt={details.title} className="h-14 max-w-[220px] object-contain mb-2 drop-shadow-lg" />
+        ) : (
+          <h1 className="text-2xl font-bold text-white mb-2">{details.title}</h1>
+        )}
         <div className="flex items-center gap-2 text-xs text-white/50 mb-4 flex-wrap">
           <span className="text-[#46d369] font-semibold">{Math.round(details.rating * 10)}%</span>
           <span>{details.year}</span>

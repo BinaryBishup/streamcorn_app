@@ -27,11 +27,21 @@ export async function GET(
     if (isManifest) {
       let text = await response.text()
 
-      // Replace dummy key URI with our key endpoint
-      // Matches: URI="data:text/plain," or URI="data:text/plain;base64,"
+      // Replace dummy key URI with our key endpoint (pass content params for per-content keys)
+      const keyParams = new URLSearchParams()
+      const tmdbId = request.nextUrl.searchParams.get('tmdb_id')
+      const contentType = request.nextUrl.searchParams.get('type')
+      const sn = request.nextUrl.searchParams.get('season_number')
+      const en = request.nextUrl.searchParams.get('episode_number')
+      if (tmdbId) keyParams.set('tmdb_id', tmdbId)
+      if (contentType) keyParams.set('type', contentType)
+      if (sn) keyParams.set('season_number', sn)
+      if (en) keyParams.set('episode_number', en)
+      const keyUrl = `/api/hls-key${keyParams.toString() ? '?' + keyParams.toString() : ''}`
+
       text = text.replace(
         /URI="data:text\/plain[^"]*"/g,
-        `URI="/api/hls-key"`
+        `URI="${keyUrl}"`
       )
 
       // Rewrite all relative URLs to go through our proxy

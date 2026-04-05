@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
   // Fetch video source
   let query = supabase
     .from('video_sources')
-    .select('url, quality, audio_tracks, subtitle_tracks')
+    .select('url, quality, audio_tracks, subtitle_tracks, encryption_key')
     .eq('tmdb_id', parseInt(tmdbId))
     .eq('type', type)
 
