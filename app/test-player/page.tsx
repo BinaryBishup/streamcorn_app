@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 export default function TestPlayer() {
   const [mods, setMods] = useState<any>(null)
   const [src, setSrc] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const hasRequestedFullscreen = useRef(false)
 
   // Load Video.js 10 modules
   useEffect(() => {
@@ -28,11 +30,56 @@ export default function TestPlayer() {
       .catch(() => setLoading(false))
   }, [])
 
-  // Lock landscape on mobile
+  // Enter fullscreen landscape on first user tap
+  const enterFullscreen = useCallback(() => {
+    if (hasRequestedFullscreen.current) return
+    hasRequestedFullscreen.current = true
+
+    const el = containerRef.current
+    if (!el) return
+
+    const goFullscreen = async () => {
+      try {
+        if (el.requestFullscreen) await el.requestFullscreen()
+        else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen()
+      } catch {}
+      try {
+        await (screen.orientation as any)?.lock?.('landscape')
+      } catch {}
+    }
+    goFullscreen()
+  }, [])
+
+  // Also try on mount (will only work if triggered by user gesture on some browsers)
   useEffect(() => {
     try { (screen.orientation as any)?.lock?.('landscape').catch(() => {}) } catch {}
-    return () => { try { (screen.orientation as any)?.unlock?.() } catch {} }
+    return () => {
+      try { (screen.orientation as any)?.unlock?.() } catch {}
+      try { if (document.fullscreenElement) document.exitFullscreen() } catch {}
+    }
   }, [])
+
+  // Force video to start playing once it has data
+  useEffect(() => {
+    if (!mods || !src) return
+    const interval = setInterval(() => {
+      const v = document.querySelector('video') as HTMLVideoElement
+      if (!v) return
+      // If duration loaded but not playing, force start
+      if (v.duration > 0 && v.readyState < 3) {
+        // Access hls engine and force start load
+        const hlsEl = v.closest('[data-media-container]')?.querySelector('video')
+        if (hlsEl) {
+          hlsEl.play().catch(() => {})
+        }
+      }
+      if (v.readyState >= 3) {
+        clearInterval(interval)
+        v.play().catch(() => {})
+      }
+    }, 500)
+    return () => clearInterval(interval)
+  }, [mods, src])
 
   if (!mods || loading) {
     return (
@@ -54,10 +101,20 @@ export default function TestPlayer() {
   const { Player, VideoSkin, HlsVideo } = mods
 
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', zIndex: 9999 }}>
+    <div
+      ref={containerRef}
+      onClick={enterFullscreen}
+      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', zIndex: 9999 }}
+    >
       <Player.Provider>
         <VideoSkin>
-          <HlsVideo src={src} playsInline autoPlay />
+          <HlsVideo
+            src={src}
+            playsInline
+            autoPlay
+            config={{ autoStartLoad: true }}
+            preload="auto"
+          />
         </VideoSkin>
       </Player.Provider>
     </div>

@@ -104,7 +104,7 @@ export default function WatchPage() {
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', zIndex: 9999 }}>
       <Player.Provider>
         <VideoSkin>
-          <HlsVideo src={src} playsInline autoPlay />
+          <HlsVideo src={src} playsInline autoPlay config={{ autoStartLoad: true }} preload="auto" />
         </VideoSkin>
       </Player.Provider>
     </div>
