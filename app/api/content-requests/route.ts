@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+export async function GET() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // All requests (user's own + others for community visibility)
+  const { data } = await supabase
+    .from('content_requests')
+    .select('id, tmdb_id, type, title, poster_path, status, vote_count, created_at, user_id')
+    .order('created_at', { ascending: false })
+    .limit(50)
+
+  return NextResponse.json({ requests: data || [], userId: user.id })
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()
