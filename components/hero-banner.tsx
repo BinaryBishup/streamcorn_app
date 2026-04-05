@@ -25,6 +25,25 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const touchStartX = useRef(0)
 
+  // Random lighter dark gradient — picked once on mount
+  const [heroGradient] = useState(() => {
+    const colors = [
+      'linear-gradient(180deg, #1a0a2e 0%, #0f0618 50%, #000 100%)',
+      'linear-gradient(180deg, #0a1e2e 0%, #061218 50%, #000 100%)',
+      'linear-gradient(180deg, #1e0a1a 0%, #120610 50%, #000 100%)',
+      'linear-gradient(180deg, #0a2e1a 0%, #061810 50%, #000 100%)',
+      'linear-gradient(180deg, #2e1a0a 0%, #181006 50%, #000 100%)',
+      'linear-gradient(180deg, #1a1a2e 0%, #0f0f18 50%, #000 100%)',
+      'linear-gradient(180deg, #2e0a20 0%, #180612 50%, #000 100%)',
+      'linear-gradient(180deg, #0a2e2e 0%, #061818 50%, #000 100%)',
+      'linear-gradient(180deg, #2e2e0a 0%, #181806 50%, #000 100%)',
+      'linear-gradient(180deg, #1a0a1a 0%, #100610 50%, #000 100%)',
+      'linear-gradient(180deg, #0a1a2e 0%, #060f18 50%, #000 100%)',
+      'linear-gradient(180deg, #2a1030 0%, #15081a 50%, #000 100%)',
+    ]
+    return colors[Math.floor(Math.random() * colors.length)]
+  })
+
   useEffect(() => {
     if (items.length <= 1) return
     timerRef.current = setInterval(() => setActive(prev => (prev + 1) % items.length), 6000)
@@ -123,8 +142,8 @@ export function HeroBanner({ items }: { items: HeroItem[] }) {
 
   return (
     <div
-      className="relative w-full px-4 pt-12 pb-2"
-      style={{ background: 'linear-gradient(180deg, #0d0015 0%, #0a0010 40%, #000 100%)' }}
+      className="relative w-full px-4 pt-16 pb-4"
+      style={{ background: heroGradient }}
       onTouchStart={handleSwipeStart}
       onTouchEnd={handleSwipeEnd}
     >
