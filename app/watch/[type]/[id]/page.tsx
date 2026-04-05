@@ -177,18 +177,25 @@ export default function WatchPage() {
     }
   }, [doSave])
 
-  // ── Auto fullscreen landscape on load ──────────────────────────────────
+  // ── Force landscape on load ─────────────────────────────────────────────
   useEffect(() => {
-    // Lock orientation immediately (works without user gesture on some browsers)
-    try { (screen.orientation as any)?.lock?.('landscape').catch(() => {}) } catch {}
+    // CSS transform trick — works immediately without user gesture
+    document.documentElement.classList.add('force-landscape')
+
+    // Also try native orientation lock (works on some Android browsers)
+    const tryOrientationLock = async () => {
+      try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
+    }
+    tryOrientationLock()
 
     return () => {
+      document.documentElement.classList.remove('force-landscape')
       try { (screen.orientation as any)?.unlock?.() } catch {}
       try { if (document.fullscreenElement) document.exitFullscreen() } catch {}
     }
   }, [])
 
-  // Enter fullscreen on first user interaction (required by mobile browsers)
+  // Enter true fullscreen on first tap (upgrades from CSS hack to real fullscreen)
   const enterFullscreen = useCallback(() => {
     if (hasEnteredFullscreen.current) return
     hasEnteredFullscreen.current = true
@@ -202,9 +209,10 @@ export default function WatchPage() {
         else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen()
       } catch {}
       try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
+      // Once in real fullscreen, remove CSS hack to avoid double rotation
+      document.documentElement.classList.remove('force-landscape')
     })()
 
-    // Also play on gesture
     videoRef.current?.play().catch(() => {})
   }, [])
 
