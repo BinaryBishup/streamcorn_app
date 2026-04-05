@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamcorn-v1'
+const CACHE_NAME = 'streamcorn-v2'
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
@@ -33,29 +33,20 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return
 
-  // Never cache JS/CSS chunks from Next.js — they have content hashes and must stay fresh
-  if (request.url.includes('/_next/')) return
+  // Never intercept: Next.js chunks, API calls, stream/HLS requests
+  if (
+    request.url.includes('/_next/') ||
+    request.url.includes('/api/') ||
+    request.url.includes('.m3u8') ||
+    request.url.includes('.ts')
+  ) return
 
-  // Network-first for API calls and navigation
-  if (request.url.includes('/api/') || request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
-          return response
-        })
-        .catch(() => caches.match(request).then((r) => r || caches.match('/')))
-    )
-    return
-  }
-
-  // Cache-first for static assets
+  // Cache-first for static assets only
   event.respondWith(
     caches.match(request).then((cached) => {
       if (cached) return cached
       return fetch(request).then((response) => {
-        if (response.ok) {
+        if (response.ok && request.mode !== 'navigate') {
           const clone = response.clone()
           caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
         }

@@ -1,237 +1,113 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import Hls from 'hls.js'
 
 export default function TestPlayer() {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [status, setStatus] = useState('Loading...')
+  const hlsRef = useRef<Hls | null>(null)
   const [src, setSrc] = useState<string | null>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [debugLog, setDebugLog] = useState<string[]>([])
+  const [vjsMods, setVjsMods] = useState<any>(null)
+  const [hlsReady, setHlsReady] = useState(false)
 
-  const log = (msg: string) => {
-    console.log('[TestPlayer]', msg)
-    setDebugLog(prev => [...prev.slice(-15), msg])
-  }
-
-  // Step 1: Unregister service workers
+  // Unregister old service workers on mount
   useEffect(() => {
     (async () => {
       if ('serviceWorker' in navigator) {
         const regs = await navigator.serviceWorker.getRegistrations()
         for (const reg of regs) await reg.unregister()
-        if (regs.length > 0) log(`Unregistered ${regs.length} service worker(s)`)
       }
       const keys = await caches.keys()
       for (const key of keys) await caches.delete(key)
-      if (keys.length > 0) log(`Cleared ${keys.length} cache(s)`)
     })()
   }, [])
 
-  // Step 2: Fetch video source
+  // Load Video.js 10 skin
   useEffect(() => {
-    log('Fetching video source...')
-    fetch('/api/video-source?tmdb_id=484133&type=movie')
-      .then(r => r.json())
-      .then(d => {
-        if (d.url) {
-          log(`Source: ${d.url}`)
-          setSrc(d.url)
-        } else {
-          log('ERROR: No video URL returned')
-          setStatus('No video source')
-        }
-      })
-      .catch(e => { log(`ERROR fetching source: ${e.message}`); setStatus('Failed to load') })
+    Promise.all([
+      import('@videojs/react'),
+      import('@videojs/react/video'),
+      import('@videojs/react/video/skin.css'),
+    ]).then(([react, video]) => {
+      const Player = react.createPlayer({ features: react.videoFeatures })
+      setVjsMods({ Player, VideoSkin: video.VideoSkin, Video: video.Video })
+    })
   }, [])
 
-  // Step 3: Once we have src, attach hls.js directly to video element
+  // Fetch video source
   useEffect(() => {
-    if (!src || !videoRef.current) return
+    fetch('/api/video-source?tmdb_id=484133&type=movie')
+      .then(r => r.json())
+      .then(d => setSrc(d.url || null))
+      .catch(() => {})
+  }, [])
+
+  // Attach hls.js directly to video element
+  useEffect(() => {
     const v = videoRef.current
+    if (!v || !src) return
 
-    let hls: any = null
-    let destroyed = false
-
-    async function init() {
-      const Hls = (await import('hls.js')).default
-
-      if (destroyed) return
-
-      if (!Hls.isSupported()) {
-        // Fallback: native HLS (Safari)
-        log('hls.js not supported, trying native HLS...')
-        v.src = src!
-        v.addEventListener('loadedmetadata', () => log(`Native HLS: duration=${Math.floor(v.duration)}s`))
-        v.addEventListener('canplay', () => { log('Native HLS: can play'); setStatus('Ready') })
-        v.addEventListener('error', () => log(`Native HLS ERROR: ${v.error?.message}`))
-        return
-      }
-
-      log('hls.js supported, initializing...')
-
-      // Verify key endpoint works
-      try {
-        const keyRes = await fetch('/api/hls-key')
-        const keyData = await keyRes.arrayBuffer()
-        const keyHex = Array.from(new Uint8Array(keyData)).map(b => b.toString(16).padStart(2, '0')).join('')
-        log(`Key: ${keyRes.status}, ${keyData.byteLength}B, hex=${keyHex}`)
-        if (keyData.byteLength !== 16) {
-          log(`ERROR: Key should be 16 bytes, got ${keyData.byteLength}`)
-        }
-        const contentType = keyRes.headers.get('content-type')
-        log(`Key content-type: ${contentType}`)
-      } catch (e: any) {
-        log(`ERROR fetching key: ${e.message}`)
-      }
-
-      // Manual decrypt test: fetch segment, decrypt with WebCrypto, check sync byte
-      try {
-        log('Testing manual decrypt...')
-        const segRes = await fetch('/api/stream/sample/video_0000.ts')
-        const segData = await segRes.arrayBuffer()
-        log(`Segment: ${segData.byteLength} bytes`)
-
-        const keyRes2 = await fetch('/api/hls-key')
-        const keyBuf = await keyRes2.arrayBuffer()
-        const ivHex = 'aff50f409efe62268851e890a9dfb905'
-        const ivBytes = new Uint8Array(ivHex.match(/.{2}/g)!.map(b => parseInt(b, 16)))
-
-        const cryptoKey = await crypto.subtle.importKey('raw', keyBuf, 'AES-CBC', false, ['decrypt'])
-        const decrypted = await crypto.subtle.decrypt({ name: 'AES-CBC', iv: ivBytes }, cryptoKey, segData)
-        const firstByte = new Uint8Array(decrypted)[0]
-        log(`Decrypted: ${decrypted.byteLength}B, first byte=0x${firstByte.toString(16)} ${firstByte === 0x47 ? '(valid MPEG-TS!)' : '(INVALID!)'}`)
-      } catch (e: any) {
-        log(`Manual decrypt FAILED: ${e.message}`)
-      }
-
-      // Verify manifest is rewritten
-      try {
-        const mRes = await fetch(src!, { cache: 'no-store' })
-        const mText = await mRes.text()
-        const hasKeyRewrite = mText.includes('/api/hls-key')
-        const hasDataPlain = mText.includes('data:text/plain')
-        log(`Manifest: keyRewrite=${hasKeyRewrite}, hasOldKey=${hasDataPlain}`)
-        if (hasDataPlain) {
-          log('WARNING: Manifest still has old data:text/plain key URI!')
-        }
-      } catch (e: any) {
-        log(`ERROR fetching manifest: ${e.message}`)
-      }
-
-      // Initialize hls.js
-      hls = new Hls({
-        enableWorker: true,
-        debug: false,
-      })
-
-      hls.on(Hls.Events.MANIFEST_PARSED, (_: any, data: any) => {
-        log(`Manifest parsed: ${data.levels?.length || 0} levels`)
-        setStatus('Buffering...')
-      })
-
-      hls.on(Hls.Events.FRAG_LOADED, () => {
-        if (status !== 'Playing') log('Fragment loaded')
-      })
-
-      hls.on(Hls.Events.FRAG_DECRYPTED, () => {
-        log('Fragment decrypted OK!')
-      })
-
-      hls.on(Hls.Events.ERROR, (_: any, data: any) => {
-        log(`HLS ERROR: ${data.type} - ${data.details} ${data.fatal ? '(FATAL)' : ''}`)
-        if (data.fatal) {
-          if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-            log('Retrying network...')
-            hls.startLoad()
-          } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-            log('Recovering media error...')
-            hls.recoverMediaError()
-          }
-        }
-      })
-
-      hls.on(Hls.Events.BUFFER_APPENDED, () => {
-        if (v.buffered.length > 0) {
-          const buffered = Math.floor(v.buffered.end(0))
-          log(`Buffered: ${buffered}s`)
-          if (!isPlaying) {
-            v.play().then(() => {
-              setIsPlaying(true)
-              setStatus('Playing')
-              log('Playback started!')
-            }).catch(e => log(`Play blocked: ${e.message}`))
-          }
-        }
-      })
-
-      log(`Loading source: ${src}`)
-      hls.loadSource(src!)
+    if (Hls.isSupported()) {
+      const hls = new Hls({ enableWorker: true })
+      hls.loadSource(src)
       hls.attachMedia(v)
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setHlsReady(true)
+        v.play().catch(() => {})
+      })
+      hls.on(Hls.Events.ERROR, (_, d) => {
+        if (d.fatal) {
+          if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad()
+          else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError()
+        }
+      })
+      hlsRef.current = hls
+    } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+      // Safari native HLS
+      v.src = src
+      v.addEventListener('loadedmetadata', () => { setHlsReady(true); v.play().catch(() => {}) })
     }
 
-    init()
-
     return () => {
-      destroyed = true
-      if (hls) hls.destroy()
+      if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null }
     }
   }, [src])
 
-  // Landscape fullscreen on tap
+  // Fullscreen landscape on tap
   const goFullscreen = async () => {
-    const el = videoRef.current?.parentElement
+    const el = document.querySelector('.player-wrap') as HTMLElement
     if (!el) return
     try {
       if (el.requestFullscreen) await el.requestFullscreen()
       else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen()
     } catch {}
     try { await (screen.orientation as any)?.lock?.('landscape') } catch {}
+    videoRef.current?.play().catch(() => {})
+  }
 
-    // Also try to play on user gesture
-    const v = videoRef.current
-    if (v && v.paused) {
-      v.play().then(() => { setIsPlaying(true); setStatus('Playing'); log('Play on tap!') }).catch(() => {})
-    }
+  // Loading state
+  if (!src || !vjsMods) {
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+        <div style={{ width: 48, height: 48, border: '3px solid rgba(255,255,255,0.2)', borderTopColor: '#e50914', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
   }
 
   return (
     <div
-      style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', zIndex: 9999, display: 'flex', flexDirection: 'column' }}
+      className="player-wrap"
       onClick={goFullscreen}
+      style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999 }}
     >
-      {/* Video */}
-      <div style={{ flex: 1, position: 'relative' }}>
-        <video
-          ref={videoRef}
-          playsInline
-          autoPlay
-          style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
-          controls
-        />
-
-        {/* Status overlay */}
-        <div style={{
-          position: 'absolute', top: 8, left: 8, right: 8,
-          background: 'rgba(0,0,0,0.8)', borderRadius: 8, padding: '8px 12px',
-          pointerEvents: 'none',
-        }}>
-          <p style={{ color: '#e50914', fontSize: 14, fontWeight: 'bold', margin: 0 }}>{status}</p>
-        </div>
-      </div>
-
-      {/* Debug log */}
-      <div style={{
-        background: '#111', padding: '8px 12px', maxHeight: 160, overflowY: 'auto',
-        fontFamily: 'monospace', fontSize: 10, lineHeight: 1.4,
-      }}>
-        {debugLog.map((msg, i) => (
-          <div key={i} style={{ color: msg.includes('ERROR') ? '#e50914' : msg.includes('OK') || msg.includes('started') ? '#4ade80' : 'rgba(255,255,255,0.6)' }}>
-            {msg}
-          </div>
-        ))}
-        {debugLog.length === 0 && <div style={{ color: 'rgba(255,255,255,0.3)' }}>Waiting...</div>}
-      </div>
+      <video
+        ref={videoRef}
+        playsInline
+        autoPlay
+        controls
+        style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+      />
     </div>
   )
 }
