@@ -1,4 +1,4 @@
-const CACHE_NAME = 'streamcorn-v4'
+const CACHE_NAME = 'streamcorn-v5'
 const STATIC_ASSETS = [
   '/',
   '/manifest.json',
