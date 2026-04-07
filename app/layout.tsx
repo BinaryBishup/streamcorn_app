@@ -46,6 +46,11 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} dark`} style={{ backgroundColor: '#000' }}>
       <body className="font-sans antialiased bg-black text-white min-h-screen" style={{ backgroundColor: '#000' }}>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){window.__bipEvent=null;window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__bipEvent=e;window.dispatchEvent(new Event('bip-ready'));});})();`,
+          }}
+        />
         <SecurityGuard />
         <PWAProvider>
           <BrowserGate>

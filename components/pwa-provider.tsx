@@ -32,15 +32,28 @@ export function PWAProvider({ children }: { children?: React.ReactNode }) {
       setIsInstalled(true)
     }
 
+    // Pick up any prompt captured before React mounted
+    const pre = (window as any).__bipEvent
+    if (pre) {
+      setInstallPrompt(pre)
+      if (!localStorage.getItem('streamcorn_pwa_dismissed')) setShowBanner(true)
+    }
+
     // Listen for install prompt
     const handler = (e: Event) => {
       e.preventDefault()
       setInstallPrompt(e)
+      ;(window as any).__bipEvent = e
       if (!localStorage.getItem('streamcorn_pwa_dismissed')) {
         setShowBanner(true)
       }
     }
     window.addEventListener('beforeinstallprompt', handler)
+    const bipReady = () => {
+      const ev = (window as any).__bipEvent
+      if (ev) setInstallPrompt(ev)
+    }
+    window.addEventListener('bip-ready', bipReady)
 
     // Detect install
     window.addEventListener('appinstalled', () => {

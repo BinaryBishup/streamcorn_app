@@ -38,20 +38,35 @@ export function BrowserGate({ children }: { children: React.ReactNode }) {
         For the best experience, add Streamcorn to your home screen
       </p>
 
-      {/* Native install button if available */}
-      {canInstall && (
-        <button onClick={install} className="w-full max-w-[280px] py-3.5 bg-[#e50914] text-white text-sm font-bold rounded-xl active:bg-[#b20710] mb-6 flex items-center justify-center gap-2">
+      {/* Native install button — shown for Android (with native prompt) or any platform where browser exposed the prompt */}
+      {(canInstall || isAndroid) && (
+        <button
+          onClick={() => {
+            if (canInstall) {
+              install()
+            } else {
+              // Prompt not yet fired — nudge the user to the manual steps below
+              const el = document.getElementById('install-instructions')
+              el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              el?.animate(
+                [{ boxShadow: '0 0 0 0 rgba(229,9,20,0.6)' }, { boxShadow: '0 0 0 12px rgba(229,9,20,0)' }],
+                { duration: 900, iterations: 2 }
+              )
+            }
+          }}
+          className="w-full max-w-[280px] py-3.5 bg-[#e50914] text-white text-sm font-bold rounded-xl active:bg-[#b20710] mb-6 flex items-center justify-center gap-2 shadow-lg shadow-red-900/30"
+        >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
             <polyline points="7 10 12 15 17 10" />
             <line x1="12" y1="15" x2="12" y2="3" />
           </svg>
-          Install Now
+          Install Streamcorn
         </button>
       )}
 
       {/* Platform-specific instructions */}
-      <div className="w-full max-w-[320px] bg-[#111] rounded-2xl p-5 text-left">
+      <div id="install-instructions" className="w-full max-w-[320px] bg-[#111] rounded-2xl p-5 text-left">
         {isAndroid ? (
           <>
             <p className="text-white font-semibold text-sm mb-4 flex items-center gap-2">
