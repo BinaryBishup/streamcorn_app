@@ -12,6 +12,8 @@ export function BrowserGate({ children }: { children: React.ReactNode }) {
     // Check if running as standalone PWA
     const standalone =
       window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
       (window.navigator as any).standalone === true
     setIsBrowser(!standalone)
     setChecked(true)
