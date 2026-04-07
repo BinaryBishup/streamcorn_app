@@ -27,6 +27,53 @@ export function BrowserGate({ children }: { children: React.ReactNode }) {
   const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent)
   const isIOS = typeof navigator !== 'undefined' && /iphone|ipad/i.test(navigator.userAgent)
 
+  // App was previously installed on this device — guide user to open it
+  if (isInstalled && !canInstall) {
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center px-8 text-center z-[9999]">
+        <img src="/icons/icon-192.png" alt="Streamcorn" className="w-20 h-20 rounded-2xl mb-6 shadow-lg" />
+        <img src="/icons/streamcorn_full_logo.png" alt="Streamcorn" className="h-6 mb-8 opacity-90" />
+
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 mb-4">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth={3}>
+            <polyline points="20 6 9 17 4 12" />
+          </svg>
+          <span className="text-emerald-400 text-[11px] font-semibold">Already Installed</span>
+        </div>
+        <h1 className="text-white text-xl font-bold mb-2">Open Streamcorn</h1>
+        <p className="text-white/40 text-sm mb-8 max-w-[280px]">
+          Streamcorn is installed on this device. Open it from your home screen for the full experience.
+        </p>
+
+        <button
+          onClick={() => {
+            // Try to launch the installed PWA via its manifest start_url
+            window.location.href = '/'
+          }}
+          className="w-full max-w-[280px] py-3.5 bg-[#e50914] text-white text-sm font-bold rounded-xl active:bg-[#b20710] mb-3 flex items-center justify-center gap-2 shadow-lg shadow-red-900/30"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <rect x="3" y="3" width="18" height="18" rx="4" />
+            <path d="M9 12h6M12 9v6" />
+          </svg>
+          Open App
+        </button>
+
+        <button
+          onClick={() => {
+            localStorage.removeItem('streamcorn_pwa_installed')
+            window.location.reload()
+          }}
+          className="text-white/40 text-xs underline underline-offset-4 py-2"
+        >
+          Not installed? Reinstall
+        </button>
+
+        <p className="text-white/20 text-[10px] mt-8">Streamcorn is a Progressive Web App</p>
+      </div>
+    )
+  }
+
   return (
     <div className="fixed inset-0 bg-black flex flex-col items-center justify-center px-8 text-center z-[9999]">
       {/* Logo */}

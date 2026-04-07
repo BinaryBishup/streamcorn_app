@@ -55,11 +55,23 @@ export function PWAProvider({ children }: { children?: React.ReactNode }) {
     }
     window.addEventListener('bip-ready', bipReady)
 
+    // Remember prior installs across browser visits
+    if (localStorage.getItem('streamcorn_pwa_installed') === '1') {
+      setIsInstalled(true)
+    }
+
     // Detect install
     window.addEventListener('appinstalled', () => {
       setIsInstalled(true)
       setShowBanner(false)
       setInstallPrompt(null)
+      localStorage.setItem('streamcorn_pwa_installed', '1')
+    })
+
+    // If a beforeinstallprompt fires again later, the app was uninstalled —
+    // clear the stale flag so UI reflects reality.
+    window.addEventListener('beforeinstallprompt', () => {
+      localStorage.removeItem('streamcorn_pwa_installed')
     })
 
     return () => window.removeEventListener('beforeinstallprompt', handler)
