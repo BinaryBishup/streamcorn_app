@@ -1,85 +1,179 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import Link from 'next/link'
 
 const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
 
 interface ContentRequest {
-  id: string; tmdb_id: number; type: string; title: string
-  poster_path: string | null; status: string; vote_count: number; created_at: string
+  id: string
+  tmdb_id: number
+  type: string
+  title: string
+  poster_path: string | null
+  status: 'pending' | 'approved' | 'added' | 'rejected' | string
+  vote_count: number
+  created_at: string
 }
 
 interface TmdbResult {
-  id: number; media_type: 'movie' | 'tv'; title?: string; name?: string
-  poster_path: string | null; release_date?: string; first_air_date?: string; overview?: string
+  id: number
+  media_type: 'movie' | 'tv'
+  title?: string
+  name?: string
+  poster_path: string | null
+  release_date?: string
+  first_air_date?: string
+  overview?: string
 }
 
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-yellow-500/15', text: 'text-yellow-400', label: 'Pending' },
-  approved: { bg: 'bg-blue-500/15', text: 'text-blue-400', label: 'Approved' },
-  added: { bg: 'bg-green-500/15', text: 'text-green-400', label: 'Added' },
-  rejected: { bg: 'bg-red-500/15', text: 'text-red-400', label: 'Rejected' },
+type StatusKey = 'pending' | 'approved' | 'added' | 'rejected'
+
+function StatusBadge({ status }: { status: StatusKey | string }) {
+  const key = (['pending', 'approved', 'added', 'rejected'].includes(status) ? status : 'pending') as StatusKey
+  const styles: Record<StatusKey, { bg: string; border: string; text: string; label: string; icon: React.ReactNode }> = {
+    pending: {
+      bg: 'bg-[#e50914]/10',
+      border: 'border-[#e50914]/30',
+      text: 'text-[#ff5a64]',
+      label: 'Pending',
+      icon: (
+        <svg width="11" height="11" viewBox="0 -960 960 960" fill="currentColor">
+          <path d="M360-840v-80h240v80H360Zm80 440h80v-240h-80v240Zm40 320q-74 0-139.5-28.5T226-186q-49-49-77.5-114.5T120-440q0-74 28.5-139.5T226-694q49-49 114.5-77.5T480-800q62 0 119 20t107 58l56-56 56 56-56 56q38 50 58 107t20 119q0 74-28.5 139.5T734-186q-49 49-114.5 77.5T480-80Z"/>
+        </svg>
+      ),
+    },
+    approved: {
+      bg: 'bg-[#46d369]/10',
+      border: 'border-[#46d369]/30',
+      text: 'text-[#46d369]',
+      label: 'Approved',
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+      ),
+    },
+    added: {
+      bg: 'bg-[#46d369]/10',
+      border: 'border-[#46d369]/30',
+      text: 'text-[#46d369]',
+      label: 'Added to catalogue',
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2m5 11h-4v4h-2v-4H7v-2h4V7h2v4h4Z"/></svg>
+      ),
+    },
+    rejected: {
+      bg: 'bg-white/[0.06]',
+      border: 'border-white/[0.12]',
+      text: 'text-white/50',
+      label: 'Rejected',
+      icon: (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><path d="m12 10.59-4.3-4.29-1.4 1.41L10.59 12l-4.3 4.29 1.41 1.42 4.3-4.3 4.29 4.3 1.41-1.42L13.41 12l4.3-4.29-1.41-1.41z"/></svg>
+      ),
+    },
+  }
+  const s = styles[key]
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-[3px] rounded-full ${s.bg} ${s.text} border ${s.border} text-[10px] font-semibold`}>
+      {s.icon}
+      {s.label}
+    </span>
+  )
 }
 
 export default function RequestPage() {
   const [requests, setRequests] = useState<ContentRequest[]>([])
   const [loadingRequests, setLoadingRequests] = useState(true)
-  const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<TmdbResult[]>([])
-  const [loading, setLoading] = useState(false)
-  const [requestedIds, setRequestedIds] = useState<Set<number>>(new Set())
-  const [requestingId, setRequestingId] = useState<number | null>(null)
+  const [searching, setSearching] = useState(false)
+  const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const fetchRequests = () => {
+  const loadRequests = () => {
     fetch('/api/content-requests')
       .then(r => r.json())
-      .then(d => {
-        setRequests(d.requests || [])
-        setRequestedIds(new Set((d.requests || []).map((r: ContentRequest) => r.tmdb_id)))
-      })
+      .then(d => setRequests(d.requests || []))
       .catch(() => {})
       .finally(() => setLoadingRequests(false))
   }
 
-  useEffect(() => { fetchRequests() }, [])
+  useEffect(() => { loadRequests() }, [])
 
-  const search = async (q: string) => {
-    if (!q.trim()) { setResults([]); return }
-    setLoading(true)
+  const requestedKeys = useMemo(
+    () => new Set(requests.map(r => `${r.type}-${r.tmdb_id}`)),
+    [requests],
+  )
+
+  const runSearch = async (q: string) => {
+    const trimmed = q.trim()
+    if (!trimmed) { setResults([]); setSearching(false); return }
+    setSearching(true)
     try {
-      const res = await fetch(`https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(q)}&page=1`)
+      const res = await fetch(
+        `https://api.themoviedb.org/3/search/multi?api_key=${TMDB_KEY}&query=${encodeURIComponent(trimmed)}&page=1&include_adult=false`,
+      )
       const data = await res.json()
-      setResults((data.results || []).filter((r: any) => r.media_type === 'movie' || r.media_type === 'tv').slice(0, 15))
-    } catch { setResults([]) }
-    setLoading(false)
+      const filtered: TmdbResult[] = (data.results || [])
+        .filter((r: { media_type: string; poster_path: string | null }) =>
+          (r.media_type === 'movie' || r.media_type === 'tv') && r.poster_path,
+        )
+        .slice(0, 20)
+      setResults(filtered)
+    } catch {
+      setResults([])
+    }
+    setSearching(false)
   }
 
-  const handleInput = (val: string) => {
+  const onInput = (val: string) => {
     setQuery(val)
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => search(val), 300)
+    debounceRef.current = setTimeout(() => runSearch(val), 350)
   }
 
-  const submitRequest = async (item: TmdbResult) => {
-    setRequestingId(item.id)
+  const submit = async (item: TmdbResult) => {
+    setSubmittingId(item.id)
+    setError(null)
     try {
-      await fetch('/api/content-requests', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tmdb_id: item.id, type: item.media_type, title: item.title || item.name, poster_path: item.poster_path }),
+      const res = await fetch('/api/content-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tmdb_id: item.id,
+          type: item.media_type,
+          title: item.title || item.name || 'Unknown',
+          poster_path: item.poster_path,
+        }),
       })
-      setRequestedIds(prev => new Set(prev).add(item.id))
-      fetchRequests()
-      setShowSearch(false)
-      setQuery('')
-      setResults([])
-    } catch {}
-    setRequestingId(null)
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body.error || 'Failed to submit')
+      }
+      // Optimistic: shove a row into the list so the user sees feedback.
+      const now = new Date().toISOString()
+      setRequests(prev => [
+        {
+          id: `tmp-${item.id}`,
+          tmdb_id: item.id,
+          type: item.media_type,
+          title: item.title || item.name || '',
+          poster_path: item.poster_path,
+          status: 'pending',
+          vote_count: 1,
+          created_at: now,
+        },
+        ...prev,
+      ])
+      loadRequests()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to submit request')
+    }
+    setSubmittingId(null)
   }
 
-  const deleteRequest = async (id: string) => {
+  const remove = async (id: string) => {
     setDeletingId(id)
     try {
       await fetch(`/api/content-requests?id=${id}`, { method: 'DELETE' })
@@ -88,125 +182,105 @@ export default function RequestPage() {
     setDeletingId(null)
   }
 
+  const pendingCount = requests.length
+
   return (
-    <div className="min-h-screen bg-black pt-4 px-4 pb-20">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-xl font-bold text-white">Requests</h1>
-          <p className="text-white/40 text-xs mt-0.5">Track your content requests</p>
-        </div>
-        <button
-          onClick={() => setShowSearch(true)}
-          className="px-4 py-2 bg-[#e50914] text-white text-xs font-bold rounded-lg flex items-center gap-1.5 active:bg-[#b20710]"
-        >
-          <svg width="14" height="14" viewBox="0 -960 960 960" fill="white"><path d="M440-280h80v-160h160v-80H520v-160h-80v160H280v80h160v160Z"/></svg>
-          New Request
-        </button>
-      </div>
+    <div className="min-h-screen bg-black px-4 pt-5 pb-10">
+      <div className="max-w-lg mx-auto">
+        <header className="mb-5">
+          <h1 className="text-[22px] font-bold text-white leading-tight">Missing a title?</h1>
+          <p className="text-white/45 text-xs mt-1">Search any movie or show on TMDB and we'll add it to the catalogue.</p>
+        </header>
 
-      {/* Loading */}
-      {loadingRequests && (
-        <div className="space-y-3">
-          {[1,2,3].map(i => <div key={i} className="h-18 bg-[#111] rounded-xl animate-pulse" />)}
-        </div>
-      )}
-
-      {/* Requests list */}
-      {!loadingRequests && requests.length > 0 && (
-        <div className="space-y-2">
-          {requests.map(req => {
-            const s = STATUS_COLORS[req.status] || STATUS_COLORS.pending
-            const canDelete = req.status === 'pending'
-            return (
-              <div key={req.id} className="flex gap-3 p-3 bg-[#111] rounded-xl">
-                <div className="w-13 aspect-[2/3] rounded-lg overflow-hidden bg-[#252525] flex-shrink-0" style={{ width: 52 }}>
-                  {req.poster_path ? <img src={`https://image.tmdb.org/t/p/w92${req.poster_path}`} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/15 text-[8px]">?</div>}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white text-sm font-medium truncate">{req.title}</p>
-                  <p className="text-white/40 text-[11px] capitalize mt-0.5">{req.type} · {new Date(req.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}</p>
-                  <span className={`${s.bg} ${s.text} text-[10px] font-semibold px-2 py-0.5 rounded-full inline-block mt-1.5`}>{s.label}</span>
-                </div>
-                {canDelete && (
-                  <button onClick={() => deleteRequest(req.id)} disabled={deletingId === req.id}
-                    className="self-center w-8 h-8 flex items-center justify-center bg-white/[0.04] rounded-full active:bg-white/10 disabled:opacity-30">
-                    <svg width="16" height="16" viewBox="0 -960 960 960" fill="rgba(255,255,255,0.3)"><path d="M280-120q-33 0-56.5-23.5T200-200v-520h-40v-80h200v-40h240v40h200v80h-40v520q0 33-23.5 56.5T680-120H280Zm80-160h80v-360h-80v360Zm160 0h80v-360h-80v360Z"/></svg>
-                  </button>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!loadingRequests && requests.length === 0 && !showSearch && (
-        <div className="text-center py-16">
-          <svg width="56" height="56" viewBox="0 -960 960 960" fill="rgba(255,255,255,0.06)" className="mx-auto mb-4">
-            <path d="M440-280h80v-160h160v-80H520v-160h-80v160H280v80h160v160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z"/>
+        {/* Search box */}
+        <div className="relative mb-4">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-[18px] h-[18px] text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
           </svg>
-          <p className="text-white/50 text-sm mb-1">No requests yet</p>
-          <p className="text-white/25 text-xs mb-5">Can't find something? Request it and we'll try to add it.</p>
-          <button onClick={() => setShowSearch(true)} className="px-6 py-2.5 bg-[#e50914] text-white text-sm font-bold rounded-xl active:bg-[#b20710]">
-            Request Content
-          </button>
+          <input
+            value={query}
+            onChange={(e) => onInput(e.target.value)}
+            placeholder="Search titles on TMDB"
+            className="w-full h-11 pl-10 pr-10 rounded-xl bg-white/[0.06] border border-white/[0.1] focus:border-white/25 text-sm text-white placeholder:text-white/30 outline-none"
+            autoComplete="off"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => { setQuery(''); setResults([]) }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 flex items-center justify-center rounded-full text-white/40 active:bg-white/10"
+              aria-label="Clear search"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          )}
         </div>
-      )}
 
-      {/* ═══ Search Modal ═══ */}
-      {showSearch && (
-        <div className="fixed inset-0 z-[200] bg-black/95 flex flex-col" onClick={() => { setShowSearch(false); setQuery(''); setResults([]) }}>
-          <div className="flex-1 overflow-y-auto px-4 pt-4" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-white text-lg font-bold">Search & Request</h2>
-              <button onClick={() => { setShowSearch(false); setQuery(''); setResults([]) }} className="text-white/40 p-1">
-                <svg width="24" height="24" viewBox="0 -960 960 960" fill="currentColor"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
-              </button>
-            </div>
+        {error && (
+          <div className="flex items-center justify-between mb-4 px-3 py-2 rounded-lg bg-[#e50914]/15 border border-[#e50914]/40">
+            <p className="text-[#ff7a80] text-xs">{error}</p>
+            <button onClick={() => setError(null)} className="text-[#ff7a80]/70 p-1" aria-label="Dismiss error">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+        )}
 
-            {/* Search input */}
-            <div className="relative mb-5">
-              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-              </svg>
-              <input type="text" value={query} onChange={e => handleInput(e.target.value)} placeholder="Search any movie or show..."
-                className="w-full bg-[#1a1a1a] text-white pl-11 pr-10 py-3 rounded-xl text-sm outline-none border border-white/[0.06] focus:border-white/20" autoFocus />
-              {query && (
-                <button onClick={() => { setQuery(''); setResults([]) }} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-              )}
-            </div>
-
-            {loading && <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-[#e50914] border-t-transparent rounded-full animate-spin" /></div>}
-
-            {/* Results */}
-            {!loading && results.length > 0 && (
-              <div className="space-y-2 pb-8">
-                {results.map(item => {
+        {/* Search results */}
+        {query.trim().length > 0 && (
+          <section className="mb-6">
+            {searching && (
+              <div className="flex justify-center py-5">
+                <div className="w-6 h-6 rounded-full border-2 border-[#e50914] border-t-transparent animate-spin" />
+              </div>
+            )}
+            {!searching && results.length === 0 && (
+              <div className="py-8 text-center">
+                <p className="text-white/40 text-xs">No matches for "{query.trim()}"</p>
+              </div>
+            )}
+            {!searching && results.length > 0 && (
+              <div className="space-y-2">
+                {results.map((item) => {
                   const title = item.title || item.name || 'Unknown'
-                  const year = (item.release_date || item.first_air_date || '').substring(0, 4)
-                  const alreadyRequested = requestedIds.has(item.id)
+                  const year = (item.release_date || item.first_air_date || '').slice(0, 4)
+                  const already = requestedKeys.has(`${item.media_type}-${item.id}`)
                   return (
-                    <div key={item.id} className="flex gap-3 p-3 bg-[#1a1a1a] rounded-xl">
-                      <div className="w-12 aspect-[2/3] rounded-lg overflow-hidden bg-[#252525] flex-shrink-0">
-                        {item.poster_path ? <img src={`https://image.tmdb.org/t/p/w92${item.poster_path}`} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-white/15 text-[8px]">?</div>}
+                    <div key={`${item.media_type}-${item.id}`} className="flex gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                      <div className="w-[60px] h-[90px] flex-shrink-0 rounded-lg overflow-hidden bg-[#1a1a1a]">
+                        {item.poster_path ? (
+                          <img
+                            src={`https://image.tmdb.org/t/p/w154${item.poster_path}`}
+                            alt=""
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-white/15 text-lg font-bold">?</div>
+                        )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-white text-sm font-medium truncate">{title}</p>
-                        <p className="text-white/40 text-[11px]">{item.media_type === 'movie' ? 'Movie' : 'TV Show'}{year && ` · ${year}`}</p>
-                        {item.overview && <p className="text-white/20 text-[10px] mt-0.5 line-clamp-1">{item.overview}</p>}
+                      <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                        <div>
+                          <p className="text-white text-sm font-semibold truncate">{title}</p>
+                          <p className="text-white/40 text-[11px] mt-0.5">
+                            {item.media_type === 'movie' ? 'Movie' : 'Show'}{year && ` · ${year}`}
+                          </p>
+                          {item.overview && (
+                            <p className="text-white/35 text-[11px] mt-1 line-clamp-2 leading-snug">{item.overview}</p>
+                          )}
+                        </div>
                       </div>
                       <div className="self-center flex-shrink-0">
-                        {alreadyRequested ? (
-                          <span className="text-[#46d369] text-[11px] font-medium flex items-center gap-1">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>Done
+                        {already ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] text-white/55 text-[11px] font-semibold">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+                            Requested
                           </span>
                         ) : (
-                          <button onClick={() => submitRequest(item)} disabled={requestingId === item.id}
-                            className="px-4 py-2 bg-[#e50914] text-white text-xs font-bold rounded-lg disabled:opacity-50">
-                            {requestingId === item.id ? '...' : 'Request'}
+                          <button
+                            onClick={() => submit(item)}
+                            disabled={submittingId === item.id}
+                            className="px-3.5 py-2 rounded-lg bg-[#e50914] text-white text-[11px] font-bold active:bg-[#b20710] disabled:opacity-50"
+                          >
+                            {submittingId === item.id ? '…' : 'Request'}
                           </button>
                         )}
                       </div>
@@ -215,21 +289,94 @@ export default function RequestPage() {
                 })}
               </div>
             )}
+          </section>
+        )}
 
-            {!loading && !query && (
-              <div className="text-center py-12">
-                <p className="text-white/30 text-sm">Search for any movie or TV show to request</p>
-              </div>
-            )}
-
-            {!loading && query && results.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-white/40 text-sm">No results for "{query}"</p>
-              </div>
+        {/* Your requests list */}
+        <section>
+          <div className="flex items-center gap-2 mb-3 px-0.5">
+            <h2 className="text-white/70 text-[11px] font-bold tracking-[0.14em] uppercase">Your requests</h2>
+            {pendingCount > 0 && (
+              <span className="px-1.5 py-0.5 text-[10px] rounded-full bg-white/[0.08] text-white/60 font-semibold">
+                {pendingCount}
+              </span>
             )}
           </div>
-        </div>
-      )}
+
+          {loadingRequests && (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <div key={i} className="h-[88px] rounded-xl bg-white/[0.04] animate-pulse" />)}
+            </div>
+          )}
+
+          {!loadingRequests && requests.length === 0 && query.trim().length === 0 && (
+            <div className="py-12 flex flex-col items-center text-center">
+              <div className="w-11 h-11 rounded-full bg-white/[0.06] flex items-center justify-center mb-3">
+                <svg width="20" height="20" viewBox="0 -960 960 960" fill="#e50914">
+                  <path d="M440-280h80v-160h160v-80H520v-160h-80v160H280v80h160v160ZM200-120q-33 0-56.5-23.5T120-200v-560q0-33 23.5-56.5T200-840h560q33 0 56.5 23.5T840-760v560q0 33-23.5 56.5T760-120H200Z"/>
+                </svg>
+              </div>
+              <p className="text-white text-sm font-bold">No requests yet</p>
+              <p className="text-white/45 text-xs mt-1 max-w-[260px]">Search for a title above and tap Request to send it to us.</p>
+            </div>
+          )}
+
+          {!loadingRequests && requests.length > 0 && (
+            <div className="space-y-2">
+              {requests.map(req => {
+                const canDelete = req.status === 'pending'
+                return (
+                  <div key={req.id} className="flex gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                    <div className="w-[56px] h-[84px] flex-shrink-0 rounded-lg overflow-hidden bg-[#1a1a1a]">
+                      {req.poster_path ? (
+                        <img
+                          src={`https://image.tmdb.org/t/p/w154${req.poster_path}`}
+                          alt=""
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/15 text-base">?</div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                      <div>
+                        <p className="text-white text-sm font-semibold truncate">{req.title}</p>
+                        <p className="text-white/40 text-[11px] capitalize mt-0.5">
+                          {req.type === 'tv' ? 'Show' : 'Movie'}
+                          {' · '}
+                          {new Date(req.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+                        </p>
+                      </div>
+                      <div className="mt-1.5">
+                        <StatusBadge status={req.status} />
+                      </div>
+                    </div>
+                    {canDelete ? (
+                      <button
+                        onClick={() => remove(req.id)}
+                        disabled={deletingId === req.id}
+                        className="self-center w-8 h-8 rounded-full flex items-center justify-center bg-white/[0.04] text-white/40 active:bg-white/10 disabled:opacity-30"
+                        aria-label="Cancel request"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                          <path d="M18 6 6 18M6 6l12 12"/>
+                        </svg>
+                      </button>
+                    ) : req.status === 'added' ? (
+                      <Link
+                        href={`/search?q=${encodeURIComponent(req.title)}`}
+                        className="self-center px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/80 text-[11px] font-bold"
+                      >
+                        Watch
+                      </Link>
+                    ) : null}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   )
 }

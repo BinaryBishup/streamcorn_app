@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Outfit } from "next/font/google";
 import { BottomNav } from "@/components/bottom-nav";
 import { Header } from "@/components/header";
 import { SessionGate } from "@/components/session-gate";
@@ -9,8 +9,10 @@ import { SecurityGuard } from "@/components/security-guard";
 import { BrowserGate } from "@/components/browser-gate";
 import "./globals.css";
 
-const inter = Inter({
+// Matches the Android phone app's Typography scale (Outfit 400–900).
+const outfit = Outfit({
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800', '900'],
   variable: '--font-sans',
   display: 'swap',
 });
@@ -44,7 +46,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} dark`} style={{ backgroundColor: '#000' }}>
+    <html lang="en" className={`${outfit.variable} dark`} style={{ backgroundColor: '#000' }}>
       <body className="font-sans antialiased bg-black text-white min-h-screen" style={{ backgroundColor: '#000' }}>
         <script
           dangerouslySetInnerHTML={{

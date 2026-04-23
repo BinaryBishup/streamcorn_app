@@ -137,6 +137,37 @@ export async function sectionFeed(
   return (data ?? []).map((r) => adapt(r as ContentRow));
 }
 
+/**
+ * "More like this" rail — prefer titles sharing the primary category of
+ * `current`, fall back to the most recent of the same db type. Always
+ * excludes `current.tmdb_id`, caps the list at 20.
+ */
+export async function relatedFor(
+  supabase: SupabaseClient,
+  current: AdaptedContent,
+  limit = 20,
+): Promise<AdaptedContent[]> {
+  const primary = current.categories[0];
+  const pool: AdaptedContent[] = [];
+  if (primary) {
+    const hit = await sectionFeed(supabase, {
+      type: current.db_type,
+      category: primary,
+      limit: 30,
+    });
+    pool.push(...hit);
+  }
+  if (pool.length < 6) {
+    const fallback = await sectionFeed(supabase, {
+      type: current.db_type,
+      limit: 30,
+    });
+    const seen = new Set(pool.map((r) => r.tmdb_id));
+    for (const r of fallback) if (!seen.has(r.tmdb_id)) pool.push(r);
+  }
+  return pool.filter((r) => r.tmdb_id !== current.tmdb_id).slice(0, limit);
+}
+
 export async function contentById(
   supabase: SupabaseClient,
   id: string

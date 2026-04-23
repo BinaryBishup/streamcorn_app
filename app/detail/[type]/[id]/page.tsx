@@ -6,6 +6,13 @@ import Link from 'next/link'
 import { fetchProgress, type WatchProgressRow } from '@/lib/watch-progress'
 import type { AdaptedContent, EpisodeRow, SeasonHeader } from '@/lib/content-adapter'
 
+interface RelatedItem {
+  tmdb_id: string
+  type: 'movie' | 'tv'
+  title: string
+  poster_path: string | null
+}
+
 function Skeleton() {
   return (
     <div className="min-h-screen bg-black animate-in fade-in duration-300">
@@ -49,8 +56,9 @@ export default function DetailPage() {
   const [progress, setProgress] = useState<WatchProgressRow | null>(null)
   const [trailerOpen, setTrailerOpen] = useState(false)
   const [inWatchlist, setInWatchlist] = useState(false)
+  const [related, setRelated] = useState<RelatedItem[]>([])
 
-  // Load the content + seasons from our DB
+  // Load the content + seasons + related from our DB in one round-trip.
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -61,6 +69,7 @@ export default function DetailPage() {
         if (!d?.content) { setContent(null); setLoading(false); return }
         setContent(d.content)
         setSeasons(d.seasons ?? [])
+        setRelated(d.related ?? [])
         if ((d.seasons ?? []).length > 0) setSelectedSeason(d.seasons[0].season_number)
         setLoading(false)
       })
@@ -282,6 +291,30 @@ export default function DetailPage() {
           </div>
         )}
       </div>
+
+      {related.length > 0 && (
+        <section className="mt-4 pb-6">
+          <h3 className="px-4 text-white text-[15px] font-black mb-3">More like this</h3>
+          <div className="flex gap-2.5 overflow-x-auto scrollbar-hide px-4 pb-1">
+            {related.map((item) => {
+              const href = `/detail/${item.type}/${item.tmdb_id}`
+              const initial = item.title?.charAt(0)?.toUpperCase() ?? ''
+              return (
+                <Link key={item.tmdb_id} href={href} prefetch={false} className="flex-shrink-0 w-[118px]">
+                  <div className="w-full aspect-[2/3] rounded-[10px] overflow-hidden bg-[#1a1a1a] flex items-center justify-center">
+                    {item.poster_path ? (
+                      <img src={item.poster_path} alt={item.title} loading="lazy" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white/40 text-[22px] font-black">{initial}</span>
+                    )}
+                  </div>
+                  <p className="text-white text-xs font-semibold line-clamp-2 mt-2 leading-tight">{item.title}</p>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
     </div>
   )
 }
