@@ -73,6 +73,10 @@ export async function GET(request: NextRequest) {
     completion_threshold: number | null
   } | null = null
 
+  // Default to the content-level key (used for movies and as a fallback
+  // for series whose per-episode key isn't populated).
+  let encryptionKeyHex = content.hash_key?.trim() ?? null
+
   if (!isMovie && seasonNumber && episodeNumber) {
     const { data: season } = await supabase
       .from('seasons')
@@ -83,7 +87,7 @@ export async function GET(request: NextRequest) {
     if (season) {
       const { data: ep } = await supabase
         .from('episodes')
-        .select('intro_start_sec, intro_end_sec, recap_end_sec, outro_start_sec, duration_sec')
+        .select('intro_start_sec, intro_end_sec, recap_end_sec, outro_start_sec, duration_sec, hash_key')
         .eq('season_id', (season as { id: string }).id)
         .eq('episode_number', parseInt(episodeNumber, 10))
         .maybeSingle()
@@ -94,6 +98,7 @@ export async function GET(request: NextRequest) {
           recap_end_sec: number | null
           outro_start_sec: number | null
           duration_sec: number | null
+          hash_key: string | null
         }
         metadata = {
           skip_intro_start: e.intro_start_sec,
@@ -103,12 +108,14 @@ export async function GET(request: NextRequest) {
           next_episode_prompt: e.outro_start_sec,
           completion_threshold: 0.93,
         }
+        if (e.hash_key?.trim()) encryptionKeyHex = e.hash_key.trim()
       }
     }
   }
 
   return NextResponse.json({
     url,
+    encryptionKeyHex,
     subtitleTracks: [],
     audioTracks: [],
     metadata,

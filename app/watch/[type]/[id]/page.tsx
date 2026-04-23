@@ -40,6 +40,13 @@ interface PlayerMetadata {
 
 // ─── utility helpers ──────────────────────────────────────────────────
 
+function hexToKeyBytes(hex: string): Uint8Array {
+  const clean = hex.trim().replace(/^0x/, '')
+  const out = new Uint8Array(clean.length / 2)
+  for (let i = 0; i < clean.length; i += 2) out[i / 2] = parseInt(clean.substring(i, i + 2), 16)
+  return out
+}
+
 function fmtTime(sec: number): string {
   if (!isFinite(sec) || sec < 0) sec = 0
   const total = Math.floor(sec)
@@ -154,6 +161,7 @@ export default function WatchPage() {
   const [src, setSrc] = useState<string | null>(null)
 
   const [ready, setReady] = useState(false)
+  const [keyHex, setKeyHex] = useState<string | null>(null)
   const [controlsVisible, setControlsVisible] = useState(true)
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
@@ -207,6 +215,7 @@ export default function WatchPage() {
       setContent(contentRes?.content ?? null)
       setSeasons(contentRes?.seasons ?? [])
       setSrc(srcRes?.url || null)
+      setKeyHex(srcRes?.encryptionKeyHex || null)
       resumeRef.current = resume
       metaRef.current = srcRes?.metadata || null
 
@@ -262,19 +271,55 @@ export default function WatchPage() {
     const v = videoRef.current
     if (!v || !src) return
 
-    // Safari / iOS play HLS natively; don't load hls.js there.
-    if (v.canPlayType('application/vnd.apple.mpegurl')) {
-      v.src = src
-      return
-    }
-
+    // Prefer hls.js everywhere it's supported. Chrome reports
+    // `canPlayType('application/vnd.apple.mpegurl') === 'maybe'` even
+    // though it can't actually play MSE-backed HLS natively — letting
+    // that path through causes MEDIA_ERR_SRC_NOT_SUPPORTED.
     if (Hls.isSupported()) {
+      // hls.js fetches key URIs via its loader chain. Our manifest
+      // already inlines keys as `data:application/octet-stream;base64,…`
+      // so the default loader works — but older hls.js builds choke on
+      // that MIME type. A CustomLoader short-circuits those requests and
+      // returns the raw key bytes from memory, matching how the Android
+      // KeyRewritingDataSource feeds them to Media3.
+      const keyBytes = keyHex ? hexToKeyBytes(keyHex) : null
+
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      const CustomLoader = class extends Hls.DefaultConfig.loader {
+        load(context: any, config: any, callbacks: any) {
+          const url: string = context?.url ?? ''
+          const isKey =
+            !!context?.keyInfo ||
+            context?.type === 'key' ||
+            url.startsWith('data:application/octet-stream') ||
+            url.startsWith('data:text/plain') ||
+            url.includes('/stream-key/') ||
+            url.includes('/api/hls-key')
+          if (isKey && keyBytes) {
+            const t = performance.now()
+            setTimeout(() => {
+              callbacks.onSuccess(
+                { url, data: keyBytes.buffer.slice(0) },
+                { trequest: t, tfirst: t, tload: t, loaded: 16, total: 16, aborted: false, retry: 0, chunkCount: 0, bwEstimate: 0, parsing: { start: t, end: t }, buffering: { start: t, end: t, first: t }, loading: { start: t, end: t, first: t } },
+                context,
+                null,
+              )
+            }, 0)
+            return
+          }
+          super.load(context, config, callbacks)
+        }
+      }
+      /* eslint-enable @typescript-eslint/no-explicit-any */
+
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
         maxBufferLength: 90,
         maxMaxBufferLength: 180,
         backBufferLength: 30,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        loader: CustomLoader as any,
       })
       hls.loadSource(src)
       hls.attachMedia(v)
@@ -303,7 +348,7 @@ export default function WatchPage() {
     }
 
     v.src = src
-  }, [src])
+  }, [src, keyHex])
 
   // ─── Video event wiring ──────────────────────────────────────────
   useEffect(() => {
