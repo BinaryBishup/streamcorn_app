@@ -385,12 +385,13 @@ export default function WatchPage() {
       {/* Native video with native controls */}
       <video
         ref={videoRef}
-        className="w-full h-full bg-black"
+        className="watch-video w-full h-full bg-black"
         playsInline
         autoPlay
         muted={muted}
         controls
-        controlsList="nodownload"
+        controlsList="nodownload nofullscreen"
+        disablePictureInPicture={false}
       />
 
       {/* Unmute / immersive entry hint when audio is muted */}
@@ -545,6 +546,19 @@ export default function WatchPage() {
           screen.orientation.lock. Rotates the whole stage so the video
           always renders in landscape regardless of physical orientation. */}
       <style jsx>{`
+        /* Fill the stage — no letterboxing. */
+        .watch-video {
+          object-fit: cover;
+        }
+        /* Suppress native fullscreen and any overflow menu that exposes
+           fullscreen; our stage is already fullscreen-on-first-tap and
+           the CSS rotation handles portrait devices. */
+        :global(.watch-video::-webkit-media-controls-fullscreen-button),
+        :global(.watch-video::-webkit-media-controls-overflow-button),
+        :global(.watch-video::-webkit-media-controls-overflow-menu-button) {
+          display: none !important;
+        }
+        /* Force-landscape for phones held in portrait. */
         @media (orientation: portrait) and (max-width: 768px) {
           .watch-stage {
             width: 100vh;
