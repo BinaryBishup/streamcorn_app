@@ -65,3 +65,28 @@ html, body {
   display: none !important;
 }
 
+/* Watch page — keep only play/pause + scrubber + time on the native
+   controls bar. Everything else (volume, fullscreen, overflow menu,
+   pip, download, captions, speed, etc.) is our overlay's job. */
+.watch-video::-webkit-media-controls-volume-slider,
+.watch-video::-webkit-media-controls-volume-slider-container,
+.watch-video::-webkit-media-controls-volume-control-container,
+.watch-video::-webkit-media-controls-mute-button,
+.watch-video::-webkit-media-controls-fullscreen-button,
+.watch-video::-webkit-media-controls-overflow-button,
+.watch-video::-webkit-media-controls-overflow-menu-button,
+.watch-video::-webkit-media-controls-overflow-menu-list,
+.watch-video::-webkit-media-controls-picture-in-picture-button,
+.watch-video::-webkit-media-controls-download-button,
+.watch-video::-webkit-media-controls-toggle-closed-captions-button,
+.watch-video::-webkit-media-controls-closed-captions-container,
+.watch-video::-webkit-media-controls-closed-captions-track-list,
+.watch-video::-webkit-media-controls-rewind-button,
+.watch-video::-webkit-media-controls-seek-forward-button,
+.watch-video::-webkit-media-controls-seek-back-button,
+.watch-video::-webkit-media-controls-cast-button {
+  display: none !important;
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
+
