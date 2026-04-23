@@ -2,51 +2,47 @@ export const dynamic = 'force-dynamic'
 
 import { HomeContent } from '@/components/home-content'
 import { createClient } from '@/lib/supabase/server'
+import { heroFeed, sectionFeed, type AdaptedContent } from '@/lib/content-adapter'
 
 async function getHomeData() {
   const supabase = await createClient()
 
-  const { data: hero } = await supabase
-    .from('content')
-    .select('tmdb_id, type, title, poster_path, backdrop_path, rating, year, overview')
-    .not('title', 'is', null).not('backdrop_path', 'is', null)
-    .gte('rating', 7.5).order('rating', { ascending: false }).limit(5)
+  const hero = await heroFeed(supabase, 5)
 
-  async function getSection(opts: { type?: string; platform?: string; genre?: string }, limit = 20) {
-    let q = supabase.from('content').select('tmdb_id, type, title, poster_path, rating, year')
-      .not('title', 'is', null).order('rating', { ascending: false }).limit(limit)
-    if (opts.type) q = q.eq('type', opts.type)
-    if (opts.platform) q = q.eq('platform', opts.platform)
-    if (opts.genre) q = q.contains('genres', [opts.genre])
-    return (await q).data || []
-  }
-
-  // All content sections (same as web browse page)
-  const [topRated, netflix, prime, appletv, crunchyroll, action, comedy, scifi, thriller, drama] = await Promise.all([
-    getSection({}), getSection({ platform: 'netflix' }), getSection({ platform: 'prime_video' }),
-    getSection({ platform: 'appletv' }), getSection({ platform: 'crunchyroll' }),
-    getSection({ genre: 'Action' }), getSection({ genre: 'Comedy' }),
-    getSection({ genre: 'Science Fiction' }), getSection({ genre: 'Thriller' }), getSection({ genre: 'Drama' }),
+  // Category sections — pulled from the live `content.categories[]` column.
+  // Keeping the row labels close to what the UI used before, but sourced
+  // from whatever tags actually exist in the DB now.
+  const [allRecent, action, drama, comedy, scifi, thriller, romance] = await Promise.all([
+    sectionFeed(supabase, { limit: 20 }),
+    sectionFeed(supabase, { category: 'Action' }),
+    sectionFeed(supabase, { category: 'Drama' }),
+    sectionFeed(supabase, { category: 'Comedy' }),
+    sectionFeed(supabase, { category: 'Science Fiction' }),
+    sectionFeed(supabase, { category: 'Thriller' }),
+    sectionFeed(supabase, { category: 'Romance' }),
   ])
 
-  // Movie-only sections
-  const [mTop, mNetflix, mPrime, mAction, mComedy, mScifi, mHorror] = await Promise.all([
-    getSection({ type: 'movie' }), getSection({ type: 'movie', platform: 'netflix' }),
-    getSection({ type: 'movie', platform: 'prime_video' }), getSection({ type: 'movie', genre: 'Action' }),
-    getSection({ type: 'movie', genre: 'Comedy' }), getSection({ type: 'movie', genre: 'Science Fiction' }),
-    getSection({ type: 'movie', genre: 'Horror' }),
+  const [mRecent, mAction, mComedy, mScifi, mHorror, mDrama] = await Promise.all([
+    sectionFeed(supabase, { type: 'movie', limit: 20 }),
+    sectionFeed(supabase, { type: 'movie', category: 'Action' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Comedy' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Science Fiction' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Horror' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Drama' }),
   ])
 
-  // Show-only sections
-  const [tTop, tNetflix, tPrime, tDrama, tAction, tScifi] = await Promise.all([
-    getSection({ type: 'tv' }), getSection({ type: 'tv', platform: 'netflix' }),
-    getSection({ type: 'tv', platform: 'prime_video' }), getSection({ type: 'tv', genre: 'Drama' }),
-    getSection({ type: 'tv', genre: 'Action' }), getSection({ type: 'tv', genre: 'Science Fiction' }),
+  const [tRecent, tAction, tDrama, tScifi, tAnime] = await Promise.all([
+    sectionFeed(supabase, { type: 'tv', limit: 20 }),
+    sectionFeed(supabase, { type: 'tv', category: 'Action' }),
+    sectionFeed(supabase, { type: 'tv', category: 'Drama' }),
+    sectionFeed(supabase, { type: 'tv', category: 'Science Fiction' }),
+    sectionFeed(supabase, { type: 'anime', limit: 20 }),
   ])
 
-  const buildSections = (arr: [string, any[]][]) => arr.filter(([, items]) => items.length > 0).map(([title, items]) => ({ title, items }))
+  const build = (arr: [string, AdaptedContent[]][]) =>
+    arr.filter(([, items]) => items.length > 0).map(([title, items]) => ({ title, items }))
 
-  // Sports events
+  // Sports events stay on the existing table — schema unchanged.
   const { data: sports } = await supabase
     .from('sports_events')
     .select('*')
@@ -55,26 +51,44 @@ async function getHomeData() {
     .limit(10)
 
   return {
-    hero: hero || [],
+    hero,
     sports: sports || [],
-    allSections: buildSections([
-      ['Top Rated', topRated], ['Popular on Netflix', netflix], ['Popular on Prime Video', prime],
-      ['Popular on Apple TV+', appletv], ['Popular on Crunchyroll', crunchyroll],
-      ['Action & Adventure', action], ['Laugh Out Loud', comedy], ['Award-Winning Dramas', drama],
-      ['Sci-Fi & Fantasy', scifi], ['Edge of Your Seat', thriller],
+    allSections: build([
+      ['New & Popular', allRecent],
+      ['Action & Adventure', action],
+      ['Award-Winning Dramas', drama],
+      ['Laugh Out Loud', comedy],
+      ['Sci-Fi & Fantasy', scifi],
+      ['Edge of Your Seat', thriller],
+      ['Romance', romance],
     ]),
-    movieSections: buildSections([
-      ['Top Rated Movies', mTop], ['Netflix Movies', mNetflix], ['Prime Video Movies', mPrime],
-      ['Action', mAction], ['Comedy', mComedy], ['Sci-Fi', mScifi], ['Horror', mHorror],
+    movieSections: build([
+      ['New Movies', mRecent],
+      ['Action', mAction],
+      ['Comedy', mComedy],
+      ['Sci-Fi', mScifi],
+      ['Horror', mHorror],
+      ['Drama', mDrama],
     ]),
-    showSections: buildSections([
-      ['Top Rated Shows', tTop], ['Netflix Shows', tNetflix], ['Prime Video Shows', tPrime],
-      ['Drama', tDrama], ['Action', tAction], ['Sci-Fi', tScifi],
+    showSections: build([
+      ['New Shows', tRecent],
+      ['Drama', tDrama],
+      ['Action', tAction],
+      ['Sci-Fi', tScifi],
+      ['Anime', tAnime],
     ]),
   }
 }
 
 export default async function HomePage() {
   const data = await getHomeData()
-  return <HomeContent hero={data.hero} sports={data.sports} allSections={data.allSections} movieSections={data.movieSections} showSections={data.showSections} />
+  return (
+    <HomeContent
+      hero={data.hero}
+      sports={data.sports}
+      allSections={data.allSections}
+      movieSections={data.movieSections}
+      showSections={data.showSections}
+    />
+  )
 }

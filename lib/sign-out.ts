@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/client'
+import { getSupabaseBrowserClient } from '@/lib/supabase/browser'
 
 export async function signOut() {
   try {
-    const supabase = createClient()
+    const supabase = getSupabaseBrowserClient()
     await supabase.auth.signOut()
   } catch {}
   // Only remove Streamcorn-specific keys — supabase.auth.signOut() handles auth cookies

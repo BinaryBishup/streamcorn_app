@@ -1,67 +1,115 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 
-const CDN_BASE_URL = process.env.NEXT_PUBLIC_CDN_BASE_URL || ''
-
+/**
+ * Returns the HLS master URL for a piece of content, plus any
+ * per-episode metadata (intro markers, recap/outro) the player uses.
+ *
+ * URL scheme (Bunny CDN, written by the streamcorn-converter pipeline):
+ *   Movie:  {contentId}/master.m3u8
+ *   Series: {contentId}/{season}/{episode}/master.m3u8
+ *
+ * Callers may pass EITHER `content_id` (uuid, preferred) or the legacy
+ * `tmdb_id`; both are resolved to a catalogue row. We return a path under
+ * `/api/stream/…` so the proxy can rewrite the embedded key URI on the fly.
+ */
 export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl
-  const tmdbId = searchParams.get('tmdb_id')
-  const type = searchParams.get('type')
-  const seasonNumber = searchParams.get('season_number')
-  const episodeNumber = searchParams.get('episode_number')
+  const sp = request.nextUrl.searchParams
+  const contentIdParam = sp.get('content_id')
+  const tmdbId = sp.get('tmdb_id')
+  const type = sp.get('type') // 'movie' | 'tv'
+  const seasonNumber = sp.get('season_number')
+  const episodeNumber = sp.get('episode_number')
 
-  if (!tmdbId || !type) {
-    return NextResponse.json({ error: 'Missing tmdb_id or type' }, { status: 400 })
+  if (!contentIdParam && !tmdbId) {
+    return NextResponse.json({ error: 'Missing content_id or tmdb_id' }, { status: 400 })
   }
 
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() } } }
-  )
+  const supabase = await createClient()
 
-  // Fetch video source
-  let query = supabase
-    .from('video_sources')
-    .select('url, quality, audio_tracks, subtitle_tracks, encryption_key')
-    .eq('tmdb_id', parseInt(tmdbId))
-    .eq('type', type)
-
-  if (type === 'tv' && seasonNumber && episodeNumber) {
-    query = query.eq('season_number', parseInt(seasonNumber)).eq('episode_number', parseInt(episodeNumber))
+  // Resolve content row
+  let content: { id: string; type: string; hash_key: string | null } | null = null
+  if (contentIdParam) {
+    const { data } = await supabase
+      .from('content')
+      .select('id, type, hash_key')
+      .eq('id', contentIdParam)
+      .maybeSingle()
+    content = data as typeof content
+  } else if (tmdbId) {
+    const { data } = await supabase
+      .from('content')
+      .select('id, type, hash_key')
+      .eq('tmdb_id', parseInt(tmdbId, 10))
+      .eq('is_hidden', false)
+      .maybeSingle()
+    content = data as typeof content
   }
+  if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 })
 
-  const { data, error } = await query.order('quality', { ascending: false }).limit(1)
+  const isMovie = content.type === 'movie'
+  const clientType = isMovie ? 'movie' : 'tv'
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  // Build proxied stream URL (the /api/stream proxy maps to Bunny).
+  const path = (!isMovie && seasonNumber && episodeNumber)
+    ? `${content.id}/${seasonNumber}/${episodeNumber}/master.m3u8`
+    : `${content.id}/master.m3u8`
+
+  const proxyParams = new URLSearchParams({ content_id: content.id, type: clientType })
+  if (!isMovie && seasonNumber && episodeNumber) {
+    proxyParams.set('season_number', seasonNumber)
+    proxyParams.set('episode_number', episodeNumber)
   }
+  const url = `/api/stream/${path}?${proxyParams.toString()}`
 
-  const source = data?.[0]
-  let url = source?.url || null
-  if (url && !url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('/')) {
-    url = `/api/stream/${url}`
+  // Pull per-episode metadata for skip markers when this is a series request.
+  let metadata: {
+    skip_intro_start: number | null
+    skip_intro_end: number | null
+    skip_recap_end: number | null
+    credits_start: number | null
+    next_episode_prompt: number | null
+    completion_threshold: number | null
+  } | null = null
+
+  if (!isMovie && seasonNumber && episodeNumber) {
+    const { data: season } = await supabase
+      .from('seasons')
+      .select('id')
+      .eq('content_id', content.id)
+      .eq('season_number', parseInt(seasonNumber, 10))
+      .maybeSingle()
+    if (season) {
+      const { data: ep } = await supabase
+        .from('episodes')
+        .select('intro_start_sec, intro_end_sec, recap_end_sec, outro_start_sec, duration_sec')
+        .eq('season_id', (season as { id: string }).id)
+        .eq('episode_number', parseInt(episodeNumber, 10))
+        .maybeSingle()
+      if (ep) {
+        const e = ep as {
+          intro_start_sec: number | null
+          intro_end_sec: number | null
+          recap_end_sec: number | null
+          outro_start_sec: number | null
+          duration_sec: number | null
+        }
+        metadata = {
+          skip_intro_start: e.intro_start_sec,
+          skip_intro_end: e.intro_end_sec,
+          skip_recap_end: e.recap_end_sec,
+          credits_start: e.outro_start_sec,
+          next_episode_prompt: e.outro_start_sec,
+          completion_threshold: 0.93,
+        }
+      }
+    }
   }
-
-  // Fetch content metadata (skip intro, credits, etc.)
-  let metaQuery = supabase
-    .from('content_metadata')
-    .select('skip_intro_start, skip_intro_end, skip_recap_end, credits_start, next_episode_prompt, completion_threshold')
-    .eq('tmdb_id', parseInt(tmdbId))
-    .eq('type', type)
-
-  if (type === 'tv' && seasonNumber && episodeNumber) {
-    metaQuery = metaQuery.eq('season_number', parseInt(seasonNumber)).eq('episode_number', parseInt(episodeNumber))
-  }
-
-  const { data: metaData } = await metaQuery.maybeSingle()
 
   return NextResponse.json({
     url,
-    subtitleTracks: source?.subtitle_tracks || [],
-    audioTracks: source?.audio_tracks || [],
-    metadata: metaData || null,
+    subtitleTracks: [],
+    audioTracks: [],
+    metadata,
   })
 }

@@ -2,37 +2,27 @@ export const dynamic = 'force-dynamic'
 
 import { ContentRow } from '@/components/content-row'
 import { createClient } from '@/lib/supabase/server'
+import { sectionFeed } from '@/lib/content-adapter'
 
 async function getMoviesSections() {
   const supabase = await createClient()
-
-  async function getSection(opts: { platform?: string; genre?: string }, limit = 20) {
-    let query = supabase.from('content').select('tmdb_id, type, title, poster_path, rating, year')
-      .eq('type', 'movie').not('title', 'is', null).order('rating', { ascending: false }).limit(limit)
-    if (opts.platform) query = query.eq('platform', opts.platform)
-    if (opts.genre) query = query.contains('genres', [opts.genre])
-    const { data } = await query
-    return data || []
-  }
-
-  const [top, netflix, prime, action, comedy, scifi, horror] = await Promise.all([
-    getSection({}),
-    getSection({ platform: 'netflix' }),
-    getSection({ platform: 'prime_video' }),
-    getSection({ genre: 'Action' }),
-    getSection({ genre: 'Comedy' }),
-    getSection({ genre: 'Science Fiction' }),
-    getSection({ genre: 'Horror' }),
+  const [top, action, comedy, scifi, horror, drama, thriller] = await Promise.all([
+    sectionFeed(supabase, { type: 'movie', limit: 20 }),
+    sectionFeed(supabase, { type: 'movie', category: 'Action' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Comedy' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Science Fiction' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Horror' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Drama' }),
+    sectionFeed(supabase, { type: 'movie', category: 'Thriller' }),
   ])
-
   return [
-    { title: 'Top Rated Movies', items: top },
-    { title: 'Netflix Movies', items: netflix },
-    { title: 'Prime Video Movies', items: prime },
+    { title: 'New Movies', items: top },
     { title: 'Action', items: action },
     { title: 'Comedy', items: comedy },
     { title: 'Sci-Fi', items: scifi },
     { title: 'Horror', items: horror },
+    { title: 'Drama', items: drama },
+    { title: 'Thriller', items: thriller },
   ].filter(s => s.items.length > 0)
 }
 

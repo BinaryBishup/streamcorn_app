@@ -4,401 +4,435 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import Hls from 'hls.js'
 import { getResumePosition, saveProgress, beaconProgress, buildPayload } from '@/lib/watch-progress'
+import type { AdaptedContent, EpisodeRow, SeasonHeader } from '@/lib/content-adapter'
 
-const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
+/**
+ * HLS player. Streams come from Bunny via `/api/stream/*` which rewrites
+ * every `#EXT-X-KEY` URI to an inline `data:application/octet-stream;base64,…`
+ * carrying the AES-128 key bytes. That's the same decryption path the
+ * native Android app uses (see KeyRewritingDataSource.kt), so the player
+ * only has to hand the manifest to hls.js / native HLS — no extra key
+ * round-trip, no custom loader.
+ *
+ * Episode/title metadata comes from our DB (`/api/content/[id]`,
+ * `/api/episodes`) — no more TMDB round-trip. The URL path still exposes
+ * a `/watch/[type]/[id]` shape where `[id]` is the content uuid.
+ */
 
-interface Episode { id: number; episode_number: number; name: string; still_path: string | null; runtime?: number | null }
-interface SeasonInfo { season_number: number; name: string }
+interface EpisodeTile {
+  id: string
+  episode_number: number
+  name: string | null
+  thumbnail_image: string | null
+  duration_sec: number | null
+}
 
 export default function WatchPage() {
   const params = useParams(); const searchParams = useSearchParams(); const router = useRouter()
-  const type = params.type as string, id = params.id as string
-  const season = parseInt(searchParams.get('s') || '1'), episode = parseInt(searchParams.get('e') || '1')
-  const tmdbId = parseInt(id), mediaType = type as 'movie' | 'tv'
-  const seasonNum = type === 'tv' ? season : undefined, episodeNum = type === 'tv' ? episode : undefined
+  const type = params.type as 'movie' | 'tv'
+  const id = params.id as string
+  const season = parseInt(searchParams.get('s') || '1')
+  const episode = parseInt(searchParams.get('e') || '1')
+  const seasonNum = type === 'tv' ? season : undefined
+  const episodeNum = type === 'tv' ? episode : undefined
 
-  const videoRef = useRef<HTMLVideoElement>(null), hlsRef = useRef<Hls | null>(null)
-  const lastSaveTs = useRef(0), profileIdRef = useRef<string | null>(null), resumeRef = useRef<number | null>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const hlsRef = useRef<Hls | null>(null)
+  const profileIdRef = useRef<string | null>(null)
+  const resumeRef = useRef<number | null>(null)
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastSaveTs = useRef(0)
 
+  const [content, setContent] = useState<AdaptedContent | null>(null)
+  const [seasons, setSeasons] = useState<SeasonHeader[]>([])
   const [src, setSrc] = useState<string | null>(null)
-  const [title, setTitle] = useState(''), [epTitle, setEpTitle] = useState('')
-  const [ready, setReady] = useState(false), [fit, setFit] = useState<'cover' | 'contain'>('cover')
+  const [ready, setReady] = useState(false)
   const [showTopBar, setShowTopBar] = useState(true)
-  const [showSettings, setShowSettings] = useState(false)
-  const [settingsTab, setSettingsTab] = useState<'audio' | 'playback'>('audio')
-  const [audioTracks, setAudioTracks] = useState<{ id: number; label: string }[]>([])
-  const [subsEnabled, setSubsEnabled] = useState(false)
-  const [playbackRate, setPlaybackRate] = useState(1)
-  const [episodes, setEpisodes] = useState<Episode[]>([])
-  const [seasons, setSeasons] = useState<SeasonInfo[]>([])
-  const [hasNext, setHasNext] = useState(false)
+  const [episodes, setEpisodes] = useState<EpisodeTile[]>([])
   const [showEpisodeSheet, setShowEpisodeSheet] = useState(false)
   const [sheetSeason, setSheetSeason] = useState(season)
-  const [sheetEpisodes, setSheetEpisodes] = useState<Episode[]>([])
+  const [sheetEpisodes, setSheetEpisodes] = useState<EpisodeTile[]>([])
+  const [hasNext, setHasNext] = useState(false)
+  const [playbackRate, setPlaybackRate] = useState(1)
+  const [fit, setFit] = useState<'cover' | 'contain'>('cover')
   const [isLandscape, setIsLandscape] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [showSkipIntro, setShowSkipIntro] = useState(false)
   const [showNextPrompt, setShowNextPrompt] = useState(false)
   const autoNextTriggered = useRef(false)
-  const metadataRef = useRef<{ skip_intro_start: number | null; skip_intro_end: number | null; skip_recap_end: number | null; credits_start: number | null; next_episode_prompt: number | null; completion_threshold: number | null } | null>(null)
+  const metadataRef = useRef<{
+    skip_intro_start: number | null
+    skip_intro_end: number | null
+    skip_recap_end: number | null
+    credits_start: number | null
+    next_episode_prompt: number | null
+    completion_threshold: number | null
+  } | null>(null)
 
-  // ── SW cleanup + profile ───────────────────────────────────────────────
   useEffect(() => {
-    (async () => { if ('serviceWorker' in navigator) { const regs = await navigator.serviceWorker.getRegistrations(); for (const reg of regs) await reg.unregister() }; const keys = await caches.keys(); for (const key of keys) await caches.delete(key) })()
     profileIdRef.current = localStorage.getItem('streamcorn_profile_id')
   }, [])
 
-  // ── Fetch source + metadata + resume ───────────────────────────────────
+  // Fetch content + resume + stream + episodes (for TV) in parallel.
   useEffect(() => {
     let cancelled = false
     async function load() {
       const pid = localStorage.getItem('streamcorn_profile_id')
       profileIdRef.current = pid
-      const qp = new URLSearchParams({ tmdb_id: id, type })
-      if (type === 'tv') { qp.set('season_number', String(season)); qp.set('episode_number', String(episode)) }
-      const [srcRes, detailRes, resume] = await Promise.all([
-        fetch(`/api/video-source?${qp}`).then(r => r.json()),
-        fetch(`https://api.themoviedb.org/3/${type}/${id}?api_key=${TMDB_KEY}`).then(r => r.json()),
-        pid ? getResumePosition(pid, tmdbId, mediaType, seasonNum, episodeNum) : null,
-      ])
-      if (cancelled) return
-      // Append content params to stream URL for per-content key lookup
-      let streamUrl = srcRes.url || null
-      if (streamUrl) {
-        const sep = streamUrl.includes('?') ? '&' : '?'
-        const keyParams = `tmdb_id=${tmdbId}&type=${type}${type === 'tv' ? `&season_number=${season}&episode_number=${episode}` : ''}`
-        streamUrl = `${streamUrl}${sep}${keyParams}`
-      }
-      setSrc(streamUrl); setTitle(detailRes.title || detailRes.name || ''); resumeRef.current = resume; metadataRef.current = srcRes.metadata || null; setReady(true)
-      if (type === 'tv') {
-        setEpTitle(`S${season}:E${episode}`)
-        setSeasons((detailRes.seasons || []).filter((s: any) => s.season_number > 0).map((s: any) => ({ season_number: s.season_number, name: s.name }))); setSheetSeason(season)
-        fetch(`https://api.themoviedb.org/3/tv/${id}/season/${season}?api_key=${TMDB_KEY}`).then(r => r.json()).then(d => {
-          if (cancelled) return
-          const eps = (d.episodes || []).map((e: any) => ({ id: e.id, episode_number: e.episode_number, name: e.name, still_path: e.still_path, runtime: e.runtime }))
-          setEpisodes(eps); setSheetEpisodes(eps); setHasNext(eps.findIndex((e: Episode) => e.episode_number === episode) < eps.length - 1)
-        }).catch(() => {})
-      }
-    }
-    load(); return () => { cancelled = true }
-  }, [id, type, season, episode, tmdbId, mediaType, seasonNum, episodeNum])
 
+      const qp = new URLSearchParams({ content_id: id, type })
+      if (type === 'tv') {
+        qp.set('season_number', String(season))
+        qp.set('episode_number', String(episode))
+      }
+
+      const [contentRes, srcRes, resume, episodeRes] = await Promise.all([
+        fetch(`/api/content/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/video-source?${qp}`).then(r => r.json()).catch(() => ({})),
+        pid ? getResumePosition(pid, id, type, seasonNum, episodeNum) : null,
+        type === 'tv'
+          ? fetch(`/api/episodes?content_id=${id}&s=${season}`).then(r => r.ok ? r.json() : null).catch(() => null)
+          : Promise.resolve(null),
+      ])
+
+      if (cancelled) return
+
+      setContent(contentRes?.content ?? null)
+      setSeasons(contentRes?.seasons ?? [])
+      setSrc(srcRes?.url || null)
+      resumeRef.current = resume
+      metadataRef.current = srcRes?.metadata || null
+
+      if (type === 'tv' && episodeRes?.episodes) {
+        const eps: EpisodeTile[] = (episodeRes.episodes as EpisodeRow[]).map((e) => ({
+          id: e.id,
+          episode_number: e.episode_number,
+          name: e.name,
+          thumbnail_image: e.thumbnail_image,
+          duration_sec: e.duration_sec,
+        }))
+        setEpisodes(eps)
+        setSheetEpisodes(eps)
+        setSheetSeason(season)
+        setHasNext(eps.findIndex(e => e.episode_number === episode) < eps.length - 1)
+      }
+      setReady(true)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [id, type, season, episode, seasonNum, episodeNum])
+
+  // Sheet: swap episodes when the user browses a different season.
   useEffect(() => {
     if (type !== 'tv' || sheetSeason === season) { setSheetEpisodes(episodes); return }
-    fetch(`https://api.themoviedb.org/3/tv/${id}/season/${sheetSeason}?api_key=${TMDB_KEY}`).then(r => r.json()).then(d => setSheetEpisodes((d.episodes || []).map((e: any) => ({ id: e.id, episode_number: e.episode_number, name: e.name, still_path: e.still_path, runtime: e.runtime })))).catch(() => {})
+    fetch(`/api/episodes?content_id=${id}&s=${sheetSeason}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d?.episodes) return
+        setSheetEpisodes((d.episodes as EpisodeRow[]).map(e => ({
+          id: e.id,
+          episode_number: e.episode_number,
+          name: e.name,
+          thumbnail_image: e.thumbnail_image,
+          duration_sec: e.duration_sec,
+        })))
+      })
+      .catch(() => {})
   }, [sheetSeason, type, id, season, episodes])
 
-  // ── Beacon save ────────────────────────────────────────────────────────
+  // Beacon save on hide/unload
   const doBeacon = useCallback(() => {
     const v = videoRef.current; const pid = profileIdRef.current
     if (!v || !pid || !isFinite(v.duration) || v.duration < 10 || v.currentTime < 5) return
-    beaconProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum))
-  }, [tmdbId, mediaType, seasonNum, episodeNum])
+    beaconProgress(buildPayload(pid, id, type, v.currentTime, v.duration, seasonNum, episodeNum))
+  }, [id, type, seasonNum, episodeNum])
 
   useEffect(() => {
     const onVis = () => { if (document.visibilityState === 'hidden') doBeacon() }
-    document.addEventListener('visibilitychange', onVis); window.addEventListener('pagehide', doBeacon); window.addEventListener('beforeunload', doBeacon)
-    return () => { doBeacon(); document.removeEventListener('visibilitychange', onVis); window.removeEventListener('pagehide', doBeacon); window.removeEventListener('beforeunload', doBeacon) }
+    const onHide = () => doBeacon()
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('pagehide', onHide)
+    window.addEventListener('beforeunload', onHide)
+    return () => {
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('pagehide', onHide)
+      window.removeEventListener('beforeunload', onHide)
+    }
   }, [doBeacon])
 
-  // ── HLS + progress save ────────────────────────────────────────────────
+  // HLS attach. The manifest we fetch comes from `/api/stream/*` which has
+  // already inlined the AES key as a `data:` URI — no custom loader needed.
   useEffect(() => {
-    const v = videoRef.current; if (!v || !src) return
-    const startPlayback = () => { if (resumeRef.current != null && resumeRef.current > 0) v.currentTime = resumeRef.current; v.play().catch(() => {}) }
-    const onPause = () => { const pid = profileIdRef.current; if (pid && isFinite(v.duration) && v.duration > 10 && v.currentTime > 5) saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)) }
-    const onTimeUpdate = () => {
+    const v = videoRef.current
+    if (!v || !src) return
+
+    // Try native HLS first (Safari / iOS)
+    if (v.canPlayType('application/vnd.apple.mpegurl')) {
+      v.src = src
+      v.play().catch(() => {})
+      return
+    }
+
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        lowLatencyMode: false,
+      })
+      hls.loadSource(src)
+      hls.attachMedia(v)
+      hls.on(Hls.Events.ERROR, (_evt, data) => {
+        if (data.fatal) console.error('[hls] fatal', data)
+      })
+      hlsRef.current = hls
+      return () => { hls.destroy(); hlsRef.current = null }
+    }
+
+    // Last-resort: assign directly and hope for the best
+    v.src = src
+  }, [src])
+
+  // Apply resume position once metadata loads
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !ready) return
+    const onLoaded = () => {
+      const t = resumeRef.current
+      if (t != null && t > 5) v.currentTime = t
+      v.removeEventListener('loadedmetadata', onLoaded)
+    }
+    v.addEventListener('loadedmetadata', onLoaded)
+    return () => v.removeEventListener('loadedmetadata', onLoaded)
+  }, [ready])
+
+  // Progress save + skip-intro / next-episode prompts
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+
+    const save = () => {
+      const pid = profileIdRef.current
+      if (!pid || !isFinite(v.duration) || v.duration < 10) return
       const now = Date.now()
-      if (now - lastSaveTs.current >= 10_000 && v.currentTime > 5 && v.duration > 10) { lastSaveTs.current = now; const pid = profileIdRef.current; if (pid) saveProgress(buildPayload(pid, tmdbId, mediaType, v.currentTime, v.duration, seasonNum, episodeNum)) }
-      // Content metadata with fallbacks
-      const meta = metadataRef.current
-      const introStart = meta?.skip_intro_start ?? 15
-      const introEnd = meta?.skip_intro_end ?? 75
-      const creditsStart = meta?.credits_start ?? (v.duration ? v.duration - 30 : Infinity)
-      const nextPromptAt = meta?.next_episode_prompt ?? (v.duration ? v.duration - 30 : Infinity)
+      if (now - lastSaveTs.current < 10_000) return
+      lastSaveTs.current = now
+      saveProgress(buildPayload(pid, id, type, v.currentTime, v.duration, seasonNum, episodeNum))
+    }
 
-      // Skip intro
-      setShowSkipIntro(v.currentTime >= introStart && v.currentTime < introEnd)
-
-      // Auto next episode
-      if (type === 'tv' && v.duration && v.duration > 60) {
-        setShowNextPrompt(v.currentTime >= nextPromptAt && v.currentTime < v.duration)
-        if (v.currentTime >= creditsStart + 10 && !autoNextTriggered.current) {
-          autoNextTriggered.current = true
-          const idx = episodes.findIndex(ep => ep.episode_number === episode)
-          if (idx >= 0 && idx < episodes.length - 1) {
-            router.push(`/watch/tv/${id}?s=${season}&e=${episodes[idx + 1].episode_number}`)
-          }
-        }
+    const onTime = () => {
+      const m = metadataRef.current
+      if (m?.skip_intro_start != null && m.skip_intro_end != null) {
+        const inIntro = v.currentTime >= m.skip_intro_start && v.currentTime < m.skip_intro_end
+        setShowSkipIntro(inIntro)
+      }
+      const threshold = m?.credits_start ?? (v.duration > 60 ? v.duration - 60 : null)
+      if (type === 'tv' && hasNext && threshold != null && v.currentTime >= threshold) {
+        setShowNextPrompt(true)
+      }
+      save()
+    }
+    const onPause = () => save()
+    const onSeeked = () => save()
+    const onEnded = () => {
+      save()
+      if (type === 'tv' && hasNext && !autoNextTriggered.current) {
+        autoNextTriggered.current = true
+        router.replace(`/watch/tv/${id}?s=${season}&e=${episode + 1}`)
       }
     }
-    v.addEventListener('pause', onPause); v.addEventListener('seeked', onPause); v.addEventListener('timeupdate', onTimeUpdate)
-    if (Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true }); hls.loadSource(src); hls.attachMedia(v)
-      hls.on(Hls.Events.MANIFEST_PARSED, startPlayback)
-      hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, () => setAudioTracks(hls.audioTracks.map((t, i) => ({ id: i, label: t.name || t.lang?.toUpperCase() || `Track ${i + 1}` }))))
-      hls.on(Hls.Events.ERROR, (_, d) => { if (d.fatal) { if (d.type === Hls.ErrorTypes.NETWORK_ERROR) hls.startLoad(); else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError() } })
-      hlsRef.current = hls
-    } else if (v.canPlayType('application/vnd.apple.mpegurl')) { v.src = src; v.addEventListener('loadedmetadata', startPlayback) }
-    return () => { v.removeEventListener('pause', onPause); v.removeEventListener('seeked', onPause); v.removeEventListener('timeupdate', onTimeUpdate); if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null } }
-  }, [src, tmdbId, mediaType, seasonNum, episodeNum])
 
-  // ── Orientation + fullscreen ───────────────────────────────────────────
+    v.addEventListener('timeupdate', onTime)
+    v.addEventListener('pause', onPause)
+    v.addEventListener('seeked', onSeeked)
+    v.addEventListener('ended', onEnded)
+    return () => {
+      v.removeEventListener('timeupdate', onTime)
+      v.removeEventListener('pause', onPause)
+      v.removeEventListener('seeked', onSeeked)
+      v.removeEventListener('ended', onEnded)
+    }
+  }, [id, type, season, episode, seasonNum, episodeNum, hasNext, router])
+
+  // Auto-hide the top bar after 3s of inactivity
   useEffect(() => {
-    const check = () => { setIsLandscape(window.innerWidth > window.innerHeight) }; check(); window.addEventListener('resize', check)
-    const onFs = () => setIsFullscreen(!!document.fullscreenElement); document.addEventListener('fullscreenchange', onFs); document.addEventListener('webkitfullscreenchange', onFs)
-    return () => { window.removeEventListener('resize', check); document.removeEventListener('fullscreenchange', onFs); document.removeEventListener('webkitfullscreenchange', onFs); try { (screen.orientation as any)?.unlock?.() } catch {}; try { if (document.fullscreenElement) document.exitFullscreen() } catch {} }
-  }, [])
-  useEffect(() => { const t = setTimeout(async () => { const el = document.getElementById('player-root'); if (!el) return; try { if (el.requestFullscreen) await el.requestFullscreen(); else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen() } catch {}; try { await (screen.orientation as any)?.lock?.('landscape') } catch {} }, 300); return () => clearTimeout(t) }, [ready])
-
-  // ── Top bar auto-hide 3s ───────────────────────────────────────────────
-  const resetHideTimer = useCallback(() => {
-    setShowTopBar(true)
+    if (!showTopBar) return
     if (hideTimer.current) clearTimeout(hideTimer.current)
     hideTimer.current = setTimeout(() => setShowTopBar(false), 3000)
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current) }
+  }, [showTopBar])
+
+  // Orientation / fullscreen helpers
+  useEffect(() => {
+    const update = () => setIsLandscape(window.matchMedia('(orientation: landscape)').matches)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
   }, [])
-  useEffect(() => { resetHideTimer() }, [resetHideTimer])
 
-  // ── Actions ────────────────────────────────────────────────────────────
-  const handleNextEp = () => { const idx = episodes.findIndex(ep => ep.episode_number === episode); if (idx < episodes.length - 1) router.push(`/watch/tv/${id}?s=${season}&e=${episodes[idx + 1].episode_number}`) }
-  const setAudioTrack = (trackId: number) => { if (hlsRef.current) hlsRef.current.audioTrack = trackId }
-  const changeSpeed = (rate: number) => { const v = videoRef.current; if (v) v.playbackRate = rate; setPlaybackRate(rate) }
+  useEffect(() => {
+    const onFs = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFs)
+    return () => document.removeEventListener('fullscreenchange', onFs)
+  }, [])
 
-  const openSettings = () => {
-    videoRef.current?.pause()
-    setShowSettings(true)
-  }
-  const closeSettings = () => {
-    setShowSettings(false)
-    videoRef.current?.play().catch(() => {})
-    resetHideTimer()
+  const toggleFullscreen = () => {
+    const el = document.documentElement
+    if (!document.fullscreenElement) el.requestFullscreen().catch(() => {})
+    else document.exitFullscreen().catch(() => {})
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────
-  if (!ready || !src) return (
-    <div style={{ position: 'fixed', inset: 0, background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-      <div style={{ width: 48, height: 48, border: '3px solid rgba(255,255,255,0.2)', borderTopColor: '#e50914', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-    </div>
-  )
+  const skipIntro = () => {
+    const v = videoRef.current; const m = metadataRef.current
+    if (!v || m?.skip_intro_end == null) return
+    v.currentTime = m.skip_intro_end
+    setShowSkipIntro(false)
+  }
 
-  const showRotatePrompt = !isLandscape && !isFullscreen
+  const nextEpisode = () => {
+    router.replace(`/watch/tv/${id}?s=${season}&e=${episode + 1}`)
+  }
+
+  const changeRate = (r: number) => {
+    setPlaybackRate(r)
+    if (videoRef.current) videoRef.current.playbackRate = r
+  }
+
+  const title = content?.title ?? ''
+  const epLabel = type === 'tv' ? `S${season}:E${episode}` : ''
 
   return (
-    <div id="player-root" style={{ position: 'fixed', inset: 0, background: '#000', zIndex: 9999 }} onTouchStart={resetHideTimer}>
-      {/* Native video — handles seekbar, play/pause, time */}
-      <video ref={videoRef} playsInline autoPlay controls style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: fit, background: '#000' }} />
-
-      {/* ═══ Custom buttons planted around native player ═══ */}
+    <div
+      className="fixed inset-0 bg-black overflow-hidden"
+      onClick={() => setShowTopBar(true)}
+      onMouseMove={() => setShowTopBar(true)}
+    >
+      <video
+        ref={videoRef}
+        className={`w-full h-full ${fit === 'contain' ? 'object-contain' : 'object-cover'}`}
+        playsInline autoPlay controls={false}
+      />
 
       {/* Top bar */}
-      <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20,
-        display: 'flex', alignItems: 'center', gap: 2, padding: '6px 8px',
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.7) 0%, transparent)',
-        opacity: showTopBar && !showSettings ? 1 : 0,
-        pointerEvents: showTopBar && !showSettings ? 'auto' : 'none',
-        transition: 'opacity 0.3s ease',
-      }}>
-        {/* Back */}
-        <button onClick={() => router.back()} style={{ background: 'none', border: 'none', color: '#fff', padding: 6, cursor: 'pointer' }}>
-          <svg width="24" height="24" viewBox="0 -960 960 960" fill="white"><path d="M560-240 320-480l240-240 56 56-184 184 184 184-56 56Z"/></svg>
+      <div
+        className={`absolute top-0 left-0 right-0 px-4 py-3 bg-gradient-to-b from-black/70 to-transparent flex items-center gap-3 transition-opacity ${showTopBar ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      >
+        <button
+          onClick={() => router.back()}
+          className="w-10 h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center"
+          aria-label="Back"
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7"/>
+          </svg>
         </button>
-
-        {/* Title */}
-        <div style={{ flex: 1, minWidth: 0, padding: '0 4px' }}>
-          <p style={{ color: '#fff', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>{title}</p>
-          {epTitle && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: 0 }}>{epTitle}</p>}
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-semibold truncate">{title}</div>
+          {epLabel && <div className="text-xs text-white/60">{epLabel}</div>}
         </div>
-
-        {/* Settings */}
-        <button onClick={openSettings} style={{ background: 'none', border: 'none', color: '#fff', padding: 6, cursor: 'pointer' }}>
-          <svg width="22" height="22" viewBox="0 -960 960 960" fill="white"><path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L84-369l103-78q-1-7-1-13v-20q0-6 1-13L84-571l104-186 119 50q11-8 23-15t24-12l16-128h208l16 128q13 5 24.5 12t22.5 15l119-50 104 186-103 78q1 7 1 13v20q0 6-2 13l103 78-104 186-119-50q-11 8-23 15t-24 12L578-80H370Zm104-300q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T334-520q0 58 40.5 99t99.5 41Z"/></svg>
-        </button>
-
-        {/* Next Episode (TV) */}
-        {type === 'tv' && hasNext && (
-          <button onClick={handleNextEp} style={{ background: 'none', border: 'none', color: '#fff', padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-            <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
-            <span>Next</span>
+        {type === 'tv' && (
+          <button
+            onClick={() => setShowEpisodeSheet(true)}
+            className="text-white/80 text-sm font-semibold px-3 py-2"
+          >
+            Episodes
           </button>
         )}
-
-        {/* Episodes (TV) */}
-        {type === 'tv' && episodes.length > 0 && (
-          <button onClick={() => { videoRef.current?.pause(); setShowEpisodeSheet(true) }} style={{ background: 'none', border: 'none', color: '#fff', padding: 6, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
-            <svg width="20" height="20" viewBox="0 -960 960 960" fill="white"><path d="M320-400h480L650-580l-130 170-96-122-104 132ZM240-240q-33 0-56.5-23.5T160-320v-480q0-33 23.5-56.5T240-880h480q33 0 56.5 23.5T800-800v480q0 33-23.5 56.5T720-240H240ZM80-80v-560h80v480h560v80H80Z"/></svg>
-            <span>Episodes</span>
+        <button
+          onClick={() => setFit(f => f === 'cover' ? 'contain' : 'cover')}
+          className="w-10 h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center text-white/70 text-[10px]"
+          aria-label="Toggle fit"
+        >
+          {fit === 'cover' ? 'FIT' : 'FILL'}
+        </button>
+        {isLandscape && (
+          <button
+            onClick={toggleFullscreen}
+            className="w-10 h-10 rounded-full bg-black/40 backdrop-blur flex items-center justify-center"
+            aria-label="Fullscreen"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}>
+              {isFullscreen
+                ? <path strokeLinecap="round" strokeLinejoin="round" d="M9 4H4v5m11-5h5v5M4 15v5h5m11 0h-5v-5"/>
+                : <path strokeLinecap="round" strokeLinejoin="round" d="M4 9V4h5M20 9V4h-5M4 15v5h5m11 0h-5v-5"/>}
+            </svg>
           </button>
         )}
       </div>
 
-      {/* Skip Intro — bottom right, shows 15s-75s */}
+      {/* Skip intro */}
       {showSkipIntro && (
-        <button onClick={() => { const v = videoRef.current; if (v) v.currentTime = metadataRef.current?.skip_intro_end ?? 75; setShowSkipIntro(false) }} style={{
-          position: 'absolute', bottom: 80, right: 16, zIndex: 20,
-          background: 'rgba(255,255,255,0.9)', border: 'none', borderRadius: 8,
-          padding: '10px 20px', color: '#000', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-        }}>
+        <button
+          onClick={skipIntro}
+          className="absolute bottom-20 right-4 bg-white text-black font-semibold px-4 py-2 rounded-full text-sm"
+        >
           Skip Intro
         </button>
       )}
 
-      {/* Auto next episode prompt — bottom right, shows at 30s remaining */}
+      {/* Next episode prompt */}
       {showNextPrompt && hasNext && (
-        <div style={{
-          position: 'absolute', bottom: 80, right: 16, zIndex: 20,
-          background: 'rgba(17,17,17,0.9)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: 12, padding: 14, minWidth: 180,
-        }}>
-          <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, margin: '0 0 8px' }}>Up Next</p>
-          <button onClick={handleNextEp} style={{
-            background: '#e50914', border: 'none', borderRadius: 8, padding: '8px 16px',
-            color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-          }}>
-            <svg width="16" height="16" viewBox="0 -960 960 960" fill="white"><path d="M660-240v-480h80v480h-80Zm-440 0v-480l360 240-360 240Z"/></svg>
-            Next Episode
-          </button>
-          <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, margin: '6px 0 0', textAlign: 'center' }}>Auto-playing in a few seconds</p>
-        </div>
+        <button
+          onClick={nextEpisode}
+          className="absolute bottom-20 right-4 bg-white text-black font-semibold px-4 py-2 rounded-full text-sm flex items-center gap-2"
+        >
+          Next Episode
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="black"><path d="M8 5v14l11-7z"/></svg>
+        </button>
       )}
 
-      {/* ═══ Settings Modal — Two Tabs ═══ */}
-      {showSettings && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.9)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={closeSettings}>
-          <div style={{ background: '#1a1a1a', borderRadius: 16, width: '90%', maxWidth: 400, maxHeight: '80vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
-            {/* Header + close */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px 0' }}>
-              <h2 style={{ color: '#fff', fontSize: 17, fontWeight: 700, margin: 0 }}>Settings</h2>
-              <button onClick={closeSettings} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', cursor: 'pointer', padding: 4 }}>
-                <svg width="22" height="22" viewBox="0 -960 960 960" fill="currentColor"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: 4, padding: '12px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <button onClick={() => setSettingsTab('audio')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: settingsTab === 'audio' ? '#fff' : 'rgba(255,255,255,0.08)', color: settingsTab === 'audio' ? '#000' : 'rgba(255,255,255,0.5)' }}>Audio & Captions</button>
-              <button onClick={() => setSettingsTab('playback')} style={{ flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', background: settingsTab === 'playback' ? '#fff' : 'rgba(255,255,255,0.08)', color: settingsTab === 'playback' ? '#000' : 'rgba(255,255,255,0.5)' }}>Playback</button>
-            </div>
-
-            {/* Tab content */}
-            <div style={{ padding: 20, overflowY: 'auto' }}>
-              {settingsTab === 'audio' && (
-                <>
-                  {/* Audio Tracks */}
-                  <div style={{ marginBottom: 24 }}>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Audio</p>
-                    {audioTracks.length <= 1 ? (
-                      <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 13 }}>Default audio</p>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        {audioTracks.map(t => (
-                          <button key={t.id} onClick={() => setAudioTrack(t.id)} style={{
-                            width: '100%', textAlign: 'left', padding: '12px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                            background: hlsRef.current?.audioTrack === t.id ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
-                            color: hlsRef.current?.audioTrack === t.id ? '#e50914' : '#fff', fontSize: 14,
-                            display: 'flex', alignItems: 'center', gap: 10,
-                          }}>
-                            <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M560-131v-82q90-26 145-100t55-168q0-94-55-168T560-749v-82q124 28 202 125.5T840-481q0 127-78 224.5T560-131ZM120-360v-240h160l200-200v640L280-360H120Zm440 40v-322q47 22 73.5 66t26.5 96q0 51-26.5 94.5T560-320Z"/></svg>
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Subtitles */}
-                  <div>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Captions</p>
-                    <button onClick={() => setSubsEnabled(!subsEnabled)} style={{
-                      width: '100%', padding: '12px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
-                      background: subsEnabled ? 'rgba(229,9,20,0.15)' : 'rgba(255,255,255,0.06)',
-                      color: subsEnabled ? '#e50914' : '#fff', fontSize: 14, display: 'flex', alignItems: 'center', gap: 10,
-                    }}>
-                      <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-160q-33 0-56.5-23.5T120-240v-480q0-33 23.5-56.5T200-800h560q33 0 56.5 23.5T840-720v480q0 33-23.5 56.5T760-160H200Zm80-200h120q17 0 28.5-11.5T440-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T400-600H280q-17 0-28.5 11.5T240-560v160q0 17 11.5 28.5T280-360Zm280 0h120q17 0 28.5-11.5T720-400v-40h-60v20h-80v-120h80v20h60v-40q0-17-11.5-28.5T680-600H560q-17 0-28.5 11.5T520-560v160q0 17 11.5 28.5T560-360Z"/></svg>
-                      {subsEnabled ? 'Captions On' : 'Captions Off'}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {settingsTab === 'playback' && (
-                <>
-                  {/* Speed */}
-                  <div style={{ marginBottom: 24 }}>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Speed</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-                      {[0.5, 0.75, 1, 1.25, 1.5, 2].map(r => (
-                        <button key={r} onClick={() => changeSpeed(r)} style={{
-                          padding: '10px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, cursor: 'pointer',
-                          background: playbackRate === r ? '#e50914' : 'rgba(255,255,255,0.08)',
-                          color: playbackRate === r ? '#fff' : 'rgba(255,255,255,0.6)',
-                        }}>{r === 1 ? 'Normal' : `${r}x`}</button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Screen Fit */}
-                  <div>
-                    <p style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, margin: '0 0 10px', textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>Screen</p>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      <button onClick={() => setFit('cover')} style={{
-                        padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        background: fit === 'cover' ? '#e50914' : 'rgba(255,255,255,0.08)',
-                        color: fit === 'cover' ? '#fff' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600,
-                      }}>
-                        <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M120-120v-200h80v120h120v80H120Zm520 0v-80h120v-120h80v200H640ZM120-640v-200h200v80H200v120h-80Zm640 0v-120H640v-80h200v200h-80Z"/></svg>
-                        Fill
-                      </button>
-                      <button onClick={() => setFit('contain')} style={{
-                        padding: '12px', borderRadius: 10, border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                        background: fit === 'contain' ? '#e50914' : 'rgba(255,255,255,0.08)',
-                        color: fit === 'contain' ? '#fff' : 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: 600,
-                      }}>
-                        <svg width="18" height="18" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-280q-33 0-56.5-23.5T120-360v-240q0-33 23.5-56.5T200-680h560q33 0 56.5 23.5T840-600v240q0 33-23.5 56.5T760-280H200Zm0-80h560v-240H200v240Z"/></svg>
-                        Original
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ═══ Episode Sheet ═══ */}
+      {/* Episode sheet */}
       {showEpisodeSheet && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 50, background: 'rgba(0,0,0,0.8)' }} onClick={() => { setShowEpisodeSheet(false); videoRef.current?.play().catch(() => {}); resetHideTimer() }}>
-          <div style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: Math.min(380, typeof window !== 'undefined' ? window.innerWidth * 0.85 : 380), background: '#111', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div style={{ position: 'sticky', top: 0, background: '#111', zIndex: 10, padding: '16px 16px 8px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <h3 style={{ color: '#fff', fontWeight: 700, fontSize: 16, margin: 0 }}>Episodes</h3>
-                <button onClick={() => { setShowEpisodeSheet(false); videoRef.current?.play().catch(() => {}); resetHideTimer() }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', padding: 4, cursor: 'pointer' }}>
-                  <svg width="22" height="22" viewBox="0 -960 960 960" fill="currentColor"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
-                </button>
+        <div
+          className="absolute inset-0 bg-black/70 z-20"
+          onClick={() => setShowEpisodeSheet(false)}
+        >
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-[#1a1a1a] rounded-t-2xl max-h-[75vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-white/[0.06]">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-bold">Episodes</h3>
+                <button onClick={() => setShowEpisodeSheet(false)} className="text-white/50 text-sm">Close</button>
               </div>
               {seasons.length > 1 && (
-                <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8 }} className="scrollbar-hide">
+                <div className="flex gap-2 overflow-x-auto scrollbar-hide">
                   {seasons.map(s => (
-                    <button key={s.season_number} onClick={() => setSheetSeason(s.season_number)} style={{ flexShrink: 0, padding: '6px 14px', borderRadius: 9999, border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', background: sheetSeason === s.season_number ? '#fff' : 'rgba(255,255,255,0.08)', color: sheetSeason === s.season_number ? '#000' : 'rgba(255,255,255,0.5)' }}>S{s.season_number}</button>
+                    <button
+                      key={s.season_number}
+                      onClick={() => setSheetSeason(s.season_number)}
+                      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold ${sheetSeason === s.season_number ? 'bg-white text-black' : 'bg-white/[0.08] text-white/60'}`}
+                    >
+                      {s.name || `Season ${s.season_number}`}
+                    </button>
                   ))}
                 </div>
               )}
             </div>
-            <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="overflow-y-auto p-3 space-y-2">
               {sheetEpisodes.map(ep => {
-                const isCur = ep.episode_number === episode && sheetSeason === season
+                const mins = ep.duration_sec ? Math.round(ep.duration_sec / 60) : null
+                const active = ep.episode_number === episode && sheetSeason === season
                 return (
-                  <button key={ep.id} onClick={() => { setShowEpisodeSheet(false); router.push(`/watch/tv/${id}?s=${sheetSeason}&e=${ep.episode_number}`) }}
-                    style={{ width: '100%', display: 'flex', gap: 12, padding: 8, borderRadius: 12, border: isCur ? '1px solid rgba(229,9,20,0.3)' : '1px solid transparent', background: isCur ? 'rgba(229,9,20,0.1)' : 'transparent', textAlign: 'left', cursor: 'pointer' }}>
-                    <div style={{ width: 100, aspectRatio: '16/9', borderRadius: 8, overflow: 'hidden', background: '#252525', flexShrink: 0 }}>
-                      {ep.still_path ? <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.15)', fontSize: 18, fontWeight: 700 }}>{ep.episode_number}</div>}
+                  <button
+                    key={ep.id}
+                    onClick={() => {
+                      setShowEpisodeSheet(false)
+                      router.replace(`/watch/tv/${id}?s=${sheetSeason}&e=${ep.episode_number}`)
+                    }}
+                    className={`w-full flex gap-3 p-2 rounded-lg text-left ${active ? 'bg-white/[0.08]' : 'active:bg-white/[0.04]'}`}
+                  >
+                    <div className="w-24 aspect-video rounded-lg overflow-hidden bg-[#252525] flex-shrink-0">
+                      {ep.thumbnail_image ? (
+                        <img src={ep.thumbnail_image} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white/20 text-sm">{ep.episode_number}</div>
+                      )}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0, paddingTop: 2 }}>
-                      <p style={{ fontSize: 13, fontWeight: 600, color: isCur ? '#e50914' : 'rgba(255,255,255,0.85)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>E{ep.episode_number} &middot; {ep.name}</p>
-                      {ep.runtime && <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, margin: '3px 0 0' }}>{ep.runtime} min</p>}
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-semibold text-white truncate">
+                        {ep.episode_number}. {ep.name || 'Episode'}
+                      </div>
+                      {mins && <div className="text-[10px] text-white/40">{mins}m</div>}
                     </div>
                   </button>
                 )
@@ -408,14 +442,18 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* Rotate prompt */}
-      {showRotatePrompt && (
-        <div style={{ position: 'absolute', inset: 0, zIndex: 60, background: 'rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-          <svg width="48" height="48" viewBox="0 -960 960 960" fill="white" style={{ opacity: 0.5 }}><path d="M480-80q-75 0-140.5-28.5t-114-77q-48.5-48.5-77-114T120-440h80q0 117 81.5 198.5T480-160q117 0 198.5-81.5T760-440q0-117-81.5-198.5T480-720h-6l62 62-56 58-160-160 160-160 56 58-62 62h6q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-440q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-80Z"/></svg>
-          <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14 }}>Rotate to landscape</p>
-          <button onClick={async () => { const el = document.getElementById('player-root'); if (!el) return; try { if (el.requestFullscreen) await el.requestFullscreen(); else if ((el as any).webkitRequestFullscreen) await (el as any).webkitRequestFullscreen() } catch {}; try { await (screen.orientation as any)?.lock?.('landscape') } catch {} }} style={{ background: '#e50914', color: '#fff', border: 'none', borderRadius: 12, padding: '12px 32px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }}>
-            Enter Fullscreen
-          </button>
+      {/* Playback rate dots (debug). Only show when top bar is visible. */}
+      {showTopBar && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+          {[0.75, 1, 1.25, 1.5, 2].map(r => (
+            <button
+              key={r}
+              onClick={() => changeRate(r)}
+              className={`px-2 py-1 rounded-full text-[10px] font-semibold ${playbackRate === r ? 'bg-white text-black' : 'bg-white/10 text-white/60'}`}
+            >
+              {r}x
+            </button>
+          ))}
         </div>
       )}
     </div>

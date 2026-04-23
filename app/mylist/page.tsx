@@ -3,15 +3,18 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
-const TMDB_KEY = '5c242b6eeca95f02957505a67a488635'
-
 interface WatchlistItem {
-  tmdb_id: number
+  tmdb_id: string
+  content_id: string
   type: 'movie' | 'tv'
-  title?: string
-  poster_path?: string | null
+  title: string
+  poster_path: string | null
 }
 
+/**
+ * My List — one round-trip to our DB (with a join to `content` for titles
+ * and posters). No more TMDB fallback.
+ */
 export default function MyListPage() {
   const [items, setItems] = useState<WatchlistItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -19,44 +22,52 @@ export default function MyListPage() {
   useEffect(() => {
     const pid = localStorage.getItem('streamcorn_profile_id')
     if (!pid) { setLoading(false); return }
-
-    fetch(`/api/watchlist?profile_id=${pid}`)
-      .then(r => r.json())
-      .then(async (d) => {
-        const raw: WatchlistItem[] = d.items || []
-        // Fetch titles + posters from TMDB
-        const enriched = await Promise.all(
-          raw.map(async (item) => {
-            try {
-              const res = await fetch(`https://api.themoviedb.org/3/${item.type}/${item.tmdb_id}?api_key=${TMDB_KEY}`)
-              const data = await res.json()
-              return { ...item, title: data.title || data.name, poster_path: data.poster_path }
-            } catch {
-              return item
-            }
-          })
-        )
-        setItems(enriched)
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
+    load(pid).finally(() => setLoading(false))
   }, [])
 
-  const removeFromList = async (tmdbId: number, type: string) => {
+  async function load(pid: string) {
+    try {
+      const res = await fetch(`/api/watchlist?profile_id=${pid}`)
+      if (!res.ok) return
+      const { items: rows } = await res.json() as { items: { content_id: string }[] }
+      if (!rows?.length) { setItems([]); return }
+
+      // Fetch each content row from our DB for the title + poster. This
+      // is sequential in request count but concurrent in flight.
+      const enriched = await Promise.all(
+        rows.map(async (r) => {
+          try {
+            const d = await fetch(`/api/content/${r.content_id}`).then(x => x.ok ? x.json() : null)
+            if (!d?.content) return null
+            const c = d.content
+            return {
+              tmdb_id: c.tmdb_id,
+              content_id: r.content_id,
+              type: c.type,
+              title: c.title,
+              poster_path: c.poster_path,
+            } as WatchlistItem
+          } catch { return null }
+        })
+      )
+      setItems(enriched.filter(Boolean) as WatchlistItem[])
+    } catch {}
+  }
+
+  const removeFromList = async (contentId: string) => {
     const pid = localStorage.getItem('streamcorn_profile_id')
     if (!pid) return
     await fetch('/api/watchlist', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ profile_id: pid, tmdb_id: tmdbId, type }),
+      body: JSON.stringify({ profile_id: pid, content_id: contentId }),
     })
-    setItems(prev => prev.filter(i => !(i.tmdb_id === tmdbId && i.type === type)))
+    setItems(prev => prev.filter(i => i.content_id !== contentId))
   }
 
   return (
     <div className="min-h-screen bg-black pt-4 px-4">
       <h1 className="text-xl font-bold text-white mb-4">My List</h1>
-
       {loading ? (
         <div className="grid grid-cols-3 gap-2">
           {Array.from({ length: 6 }).map((_, i) => (
@@ -74,20 +85,20 @@ export default function MyListPage() {
       ) : (
         <div className="grid grid-cols-3 gap-2">
           {items.map(item => (
-            <div key={`${item.type}-${item.tmdb_id}`} className="relative">
+            <div key={item.content_id} className="relative">
               <Link href={`/detail/${item.type}/${item.tmdb_id}`}>
                 <div className="aspect-[2/3] rounded-lg overflow-hidden bg-[#1a1a1a]">
                   {item.poster_path ? (
-                    <img src={`https://image.tmdb.org/t/p/w342${item.poster_path}`} alt={item.title || ''} className="w-full h-full object-cover" loading="lazy" />
+                    <img src={item.poster_path} alt={item.title} className="w-full h-full object-cover" loading="lazy" />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center text-white/20 text-[10px] p-2 text-center">{item.title || 'Unknown'}</div>
+                    <div className="w-full h-full flex items-center justify-center text-white/20 text-[10px] p-2 text-center">{item.title}</div>
                   )}
                 </div>
               </Link>
-              {/* Remove button */}
               <button
-                onClick={() => removeFromList(item.tmdb_id, item.type)}
+                onClick={() => removeFromList(item.content_id)}
                 className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/70 backdrop-blur rounded-full flex items-center justify-center"
+                aria-label="Remove"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth={2}><path d="M18 6L6 18M6 6l12 12"/></svg>
               </button>
