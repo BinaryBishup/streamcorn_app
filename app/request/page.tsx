@@ -80,6 +80,11 @@ function StatusBadge({ status }: { status: StatusKey | string }) {
   )
 }
 
+interface CatalogueHit {
+  content_id: string
+  client_type: 'movie' | 'tv'
+}
+
 export default function RequestPage() {
   const [requests, setRequests] = useState<ContentRequest[]>([])
   const [loadingRequests, setLoadingRequests] = useState(true)
@@ -89,12 +94,44 @@ export default function RequestPage() {
   const [submittingId, setSubmittingId] = useState<number | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // tmdb_id → catalogue match (uuid + client-side type). Accumulates as
+  // we hear about new ids from either the requests list or TMDB search.
+  const [catalogue, setCatalogue] = useState<Map<number, CatalogueHit>>(new Map())
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Merge a fresh set of catalogue hits into state, replacing any prior
+  // entries for the same tmdb_id.
+  const mergeCatalogue = (hits: Array<{ tmdb_id: number; content_id: string; client_type: 'movie' | 'tv' }>) => {
+    if (hits.length === 0) return
+    setCatalogue(prev => {
+      const next = new Map(prev)
+      for (const h of hits) next.set(h.tmdb_id, { content_id: h.content_id, client_type: h.client_type })
+      return next
+    })
+  }
+
+  const checkCatalogue = async (tmdbIds: number[]) => {
+    if (tmdbIds.length === 0) return
+    const unique = Array.from(new Set(tmdbIds)).filter((n) => Number.isFinite(n))
+    if (unique.length === 0) return
+    try {
+      const res = await fetch(`/api/content/by-tmdb?ids=${unique.join(',')}`)
+      if (!res.ok) return
+      const d = (await res.json()) as { items?: Array<{ tmdb_id: number; content_id: string; client_type: 'movie' | 'tv' }> }
+      mergeCatalogue(d.items ?? [])
+    } catch {}
+  }
 
   const loadRequests = () => {
     fetch('/api/content-requests')
       .then(r => r.json())
-      .then(d => setRequests(d.requests || []))
+      .then((d: { requests?: ContentRequest[] }) => {
+        const list = d.requests || []
+        setRequests(list)
+        // Backfill catalogue state for every request so "added" rows get
+        // a direct Watch deep-link.
+        checkCatalogue(list.map((r) => r.tmdb_id))
+      })
       .catch(() => {})
       .finally(() => setLoadingRequests(false))
   }
@@ -121,6 +158,8 @@ export default function RequestPage() {
         )
         .slice(0, 20)
       setResults(filtered)
+      // Fire catalogue check for the new batch of results.
+      checkCatalogue(filtered.map((r) => r.id))
     } catch {
       setResults([])
     }
@@ -244,6 +283,7 @@ export default function RequestPage() {
                   const title = item.title || item.name || 'Unknown'
                   const year = (item.release_date || item.first_air_date || '').slice(0, 4)
                   const already = requestedKeys.has(`${item.media_type}-${item.id}`)
+                  const inCatalogue = catalogue.get(item.id)
                   return (
                     <div key={`${item.media_type}-${item.id}`} className="flex gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
                       <div className="w-[60px] h-[90px] flex-shrink-0 rounded-lg overflow-hidden bg-[#1a1a1a]">
@@ -269,7 +309,15 @@ export default function RequestPage() {
                         </div>
                       </div>
                       <div className="self-center flex-shrink-0">
-                        {already ? (
+                        {inCatalogue ? (
+                          <Link
+                            href={`/detail/${inCatalogue.client_type}/${inCatalogue.content_id}`}
+                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#46d369]/15 border border-[#46d369]/30 text-[#46d369] text-[11px] font-bold active:bg-[#46d369]/25"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
+                            In catalogue
+                          </Link>
+                        ) : already ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-white/[0.06] text-white/55 text-[11px] font-semibold">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.2 4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4z"/></svg>
                             Requested
@@ -325,8 +373,10 @@ export default function RequestPage() {
             <div className="space-y-2">
               {requests.map(req => {
                 const canDelete = req.status === 'pending'
-                return (
-                  <div key={req.id} className="flex gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                const hit = catalogue.get(req.tmdb_id)
+                const watchHref = hit ? `/detail/${hit.client_type}/${hit.content_id}` : null
+                const rowBody = (
+                  <>
                     <div className="w-[56px] h-[84px] flex-shrink-0 rounded-lg overflow-hidden bg-[#1a1a1a]">
                       {req.poster_path ? (
                         <img
@@ -351,6 +401,17 @@ export default function RequestPage() {
                         <StatusBadge status={req.status} />
                       </div>
                     </div>
+                  </>
+                )
+                return (
+                  <div key={req.id} className="flex gap-3 p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
+                    {watchHref ? (
+                      <Link href={watchHref} className="contents">
+                        {rowBody}
+                      </Link>
+                    ) : (
+                      rowBody
+                    )}
                     {canDelete ? (
                       <button
                         onClick={() => remove(req.id)}
@@ -362,11 +423,12 @@ export default function RequestPage() {
                           <path d="M18 6 6 18M6 6l12 12"/>
                         </svg>
                       </button>
-                    ) : req.status === 'added' ? (
+                    ) : watchHref ? (
                       <Link
-                        href={`/search?q=${encodeURIComponent(req.title)}`}
-                        className="self-center px-3 py-1.5 rounded-lg bg-white/[0.06] text-white/80 text-[11px] font-bold"
+                        href={watchHref}
+                        className="self-center inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-[#e50914] text-white text-[11px] font-bold active:bg-[#b20710]"
                       >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                         Watch
                       </Link>
                     ) : null}
