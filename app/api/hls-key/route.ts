@@ -26,7 +26,6 @@ export async function GET(request: NextRequest) {
   const sp = request.nextUrl.searchParams
   const contentId = sp.get('content_id')
   const tmdbId = sp.get('tmdb_id')
-  const type = sp.get('type')
   const seasonNumber = sp.get('season_number')
   const episodeNumber = sp.get('episode_number')
 
@@ -35,21 +34,22 @@ export async function GET(request: NextRequest) {
   if (contentId || tmdbId) {
     const supabase = await createClient()
     // Resolve the content row
-    let row: { id: string; type: string; hash_key: string | null } | null = null
+    type ContentRow = { id: string; type: string; hash_key: string | null }
+    let row: ContentRow | null = null
     if (contentId) {
       const { data } = await supabase
         .from('content')
         .select('id, type, hash_key')
         .eq('id', contentId)
         .maybeSingle()
-      row = data as typeof row
+      row = data as ContentRow | null
     } else if (tmdbId) {
       const { data } = await supabase
         .from('content')
         .select('id, type, hash_key')
         .eq('tmdb_id', parseInt(tmdbId, 10))
         .maybeSingle()
-      row = data as typeof row
+      row = data as ContentRow | null
     }
 
     if (row) {
@@ -94,6 +94,3 @@ export async function GET(request: NextRequest) {
     },
   })
 }
-
-// Silence unused-var warning until callers are fully migrated off type/tmdb
-void type

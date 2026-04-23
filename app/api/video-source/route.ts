@@ -28,14 +28,15 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
 
   // Resolve content row
-  let content: { id: string; type: string; hash_key: string | null } | null = null
+  type ContentRow = { id: string; type: string; hash_key: string | null }
+  let content: ContentRow | null = null
   if (contentIdParam) {
     const { data } = await supabase
       .from('content')
       .select('id, type, hash_key')
       .eq('id', contentIdParam)
       .maybeSingle()
-    content = data as typeof content
+    content = data as ContentRow | null
   } else if (tmdbId) {
     const { data } = await supabase
       .from('content')
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       .eq('tmdb_id', parseInt(tmdbId, 10))
       .eq('is_hidden', false)
       .maybeSingle()
-    content = data as typeof content
+    content = data as ContentRow | null
   }
   if (!content) return NextResponse.json({ error: 'Content not found' }, { status: 404 })
 

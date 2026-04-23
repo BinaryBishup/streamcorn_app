@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     last_watched: string
     content: { id: string; name: string; type: 'movie' | 'show' | 'anime'; backdrop_image: string | null; poster_image: string | null } | null
   }
-  const items = ((data ?? []) as JoinedRow[]).map((row) => ({
+  const items = ((data ?? []) as unknown as JoinedRow[]).map((row) => ({
     tmdb_id: row.content_id,
     content_id: row.content_id,
     type: (row.content?.type === 'movie' ? 'movie' : 'tv') as 'movie' | 'tv',
